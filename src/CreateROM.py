@@ -4,7 +4,7 @@ For a given meanfield solution, start to build a ROM basis for the response func
 import subprocess
 from pathlib import Path
 import numpy as np
-
+from src.Utils import combine_FAM_output
 
 class CreateROM:
     def __init__(self, path_to_meanfield_wf=None, p=10, n=10, w_min=0.0, w_max=50.0, smear=1.0, snapshots=20):
@@ -12,7 +12,9 @@ class CreateROM:
         self.num_neutron = n
 
         self.build_type = 'equidistant_1D'
-        self.set_omega_range(w_min, w_max)
+        self.w_min = np.real(w_min)
+        self.w_max = np.real(w_max)
+
         self.path_to_meanfield_wf = path_to_meanfield_wf
         self.num_snapshots = snapshots
         self.l = 0  # multipolarity
@@ -31,24 +33,21 @@ class CreateROM:
             self.launch_FAM = False
         else:
             print("Meanfield path provided.")
-            if self.check_tantalus_installation():
+            if self._check_tantalus_installation():
                 print("Tantalus installation found.")
                 self.launch_FAM = True
             else:
                 print("Tantalus installation not found. No FAM runs will be launched.")
                 self.launch_FAM = False
 
-    def check_tantalus_installation(self):
+    def _check_tantalus_installation(self):
         # check if tantalus is installed
         self.TANTALUS_PATH = "$HOME/code/tantalus/"
         return True
 
-    def set_omega_range(self, w_min, w_max):
-        self.w_min = w_min
-        self.w_max = w_max
-        pass
-
     def build_snapshot_basis_static(self):
+        self._clear_working_directory()
+
         # static basis creation
         omegas = None
         if self.build_type == 'equidistant_1D':
@@ -61,8 +60,9 @@ class CreateROM:
             # output folder name
             OUTPUT_NAME = "TMP_SNAPSHOTS"
 
-            fam_runfiles = self.create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
+            fam_runfiles = self._create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
             RUN_FAM = input("Do you want to launch the FAM calculation now? (y/n): ") == 'y'
+
             for fam_runfile in fam_runfiles.iterdir():
                 ###  launch FAM with this runfile ###
                 # Convert Windows path to WSL path
@@ -76,10 +76,11 @@ class CreateROM:
 
             # merge all output folders into one
             # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
-            print(f"Merging FAM output files into folder: {OUTPUT_NAME}")
+            print(f"Merging FAM output files into folder: {self.working_directory.joinpath(OUTPUT_NAME)}")
+            combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+                               output_dir=self.working_directory.parent.parent.joinpath("_output"))
 
-
-            #self.clear_working_directory()
+            self._clear_working_directory()
             return
 
         else:
@@ -89,7 +90,11 @@ class CreateROM:
                 print(omega)
             return
 
-    def clear_working_directory(self):
+    def build_snapshot_basis_iterative(self):
+        # make iterative basis. Each iteration, launch a new FAM calculation and automatically continue
+        raise NotImplementedError
+
+    def _clear_working_directory(self):
         """
         Clear the working directory
         """
@@ -104,13 +109,13 @@ class CreateROM:
         else:
             self.working_directory.mkdir(parents=True, exist_ok=True)
 
-    def create_fam_runfiles(self, omegas_step, output_folder=""):
+    def _create_fam_runfiles(self, omegas_step, output_folder=""):
         """
         Create a FAM runfile for the given omegas
         """
         run_folder = self.working_directory.joinpath('tmp')
         run_folder.mkdir(parents=True, exist_ok=True)
-        for omega in omegas_step:
+        for iteration, omega in enumerate(omegas_step):
             Rew = omega.real
             Imw = omega.imag
             file = run_folder.joinpath(f"fam_run{Rew}+{Imw}j.sh")
@@ -129,7 +134,7 @@ m={self.m}
 param="{self.param}"
 pref="{self.param_prefix[self.param]}"
 logdir_name="{output_folder}"
-OUT="{Rew}+{Imw}j"
+OUT="V{iteration}"
 
 # Recompute dependent variables if needed
 nwn=30

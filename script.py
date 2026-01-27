@@ -1,12 +1,10 @@
-from tests.utils.helpers import Paths
-
 from src.CreateROM import CreateROM
-import os
+from src.Utils import combine_FAM_output
 from pathlib import Path
-DATA_FOLDER = "$HOME/projects/tantalus_private/ssh_dump/MEANFIELD_OUT/wf.12.12.30.30"
 
+WAVE_FUNCTION = "$HOME/projects/tantalus_private/ssh_dump/MEANFIELD_OUT/wf.12.12.30.30"
 
-rom_builder = CreateROM(path_to_meanfield_wf=DATA_FOLDER,
+rom_builder = CreateROM(path_to_meanfield_wf=WAVE_FUNCTION,
                         p=12,
                         n=12,
                         w_min=0.0,
@@ -15,3 +13,5 @@ rom_builder = CreateROM(path_to_meanfield_wf=DATA_FOLDER,
                         snapshots=2)
 
 rom_builder.build_snapshot_basis_static()
+# FAM_output = Path(r'C:\Users\emmav\PycharmProjects\ROM\_output')
+# combine_FAM_output(directory='C:\\Users\emmav\PycharmProjects\ROM\src\work_dir\TMP_SNAPSHOTS', output_dir=FAM_output)
