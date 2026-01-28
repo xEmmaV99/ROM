@@ -282,15 +282,16 @@ def parse_XY_numba(filename, sparse_bool=True, return_idx=False):
     return RESULT, omegas, F_data
 
 
-def combine_FAM_output(directory, output_name='', output_dir=None):
+def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False):
     import glob
     import numpy as np
     import pandas as pd
+    print('Combining FAM output')
     def concat_fam_files(directory):
         # get a list of all the .fam files in the directory
-        print(glob.glob(directory + '/*.famV0'))
+        if verbose: print(glob.glob(directory + '/*.famV0'))
         for name in glob.glob(directory + '/*.famV0'):
-            print('Processing:', name)
+            if verbose: print('Processing:', name)
             fam_files=[]
             for f in glob.glob(name[:-1] + '*'):
                 version = f.split('V')[-1]
@@ -299,8 +300,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None):
             #if name+"V2" in glob.glob(directory + '/' + name +):
             if len(fam_files) > 0:
                 fam_files.append(name)
-                print(f'Merging')
-                print(fam_files)
+                if verbose: print(f'Merging', fam_files)
 
                 # open the first file to get the header (trailing '#' signs)
                 with open(fam_files[0], 'r') as f:
@@ -331,13 +331,13 @@ def combine_FAM_output(directory, output_name='', output_dir=None):
                 df_cleaned = df_combined.drop_duplicates().sort_values(by=df_combined.columns[0])
 
                 # write combined output to famfileout
-                print("name", name)
+                if verbose: print("name", name)
                 if output_name == '':
                     famfileout = output_dir.joinpath(name.split('\\')[-1].split('.famV')[0] + '.fam')
                 else:
                     famfileout = output_dir.joinpath(output_name + '.fam')
                 write_fam_data(df_cleaned, header, famfileout)
-                print(f'Combined output written to "{famfileout}": ')
+                if verbose: print(f'Combined output written to "{famfileout}": ')
 
         return
 
@@ -346,7 +346,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None):
         concatenate .xy files from different runs together.
         """
         for name in glob.glob(directory + '/*.xyV0'):
-            print('Processing:', name)
+            if verbose: print('Processing:', name)
             xy_files=[]
 
             all_header = None
@@ -357,8 +357,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None):
                     xy_files.append(f)
             if len(xy_files) > 0:
                 xy_files.append(name)
-                print(f'Merging')
-                print(xy_files)
+                if verbose: print(f'Merging',xy_files)
 
             for i, file_path in enumerate(xy_files):
                 header, omega_blocks = XY_parse_file(file_path)
@@ -383,9 +382,9 @@ def combine_FAM_output(directory, output_name='', output_dir=None):
                 for omega, block_lines in all_blocks:
                     out.writelines(block_lines)
 
-            print(f"Written combined file: {out}")
+            if verbose: print(f"Written combined file: {out}")
 
-        return
+        return out.name
 
     def read_fam_data(filename):
         df = pd.read_csv(filename, sep=r'\s+', comment='#',
@@ -437,4 +436,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None):
 
 
     concat_fam_files(directory)
-    concat_xy_files(directory)
+    out_file = concat_xy_files(directory)
+
+    # return name
+    return Path(out_file)

@@ -16,6 +16,7 @@ class CreateROM:
         self.w_max = np.real(w_max)
 
         self.path_to_meanfield_wf = path_to_meanfield_wf
+        self.path_to_snapshot = Path("None")
         self.num_snapshots = snapshots
         self.l = 0  # multipolarity
         self.m = 0  # magnetic quantum number
@@ -33,12 +34,18 @@ class CreateROM:
             self.launch_FAM = False
         else:
             print("Meanfield path provided.")
+            self._set_num_wf_from_meanfield()
             if self._check_tantalus_installation():
                 print("Tantalus installation found.")
                 self.launch_FAM = True
             else:
                 print("Tantalus installation not found. No FAM runs will be launched.")
                 self.launch_FAM = False
+
+    def _set_num_wf_from_meanfield(self):
+        self.num_proton_wf = 30
+        self.num_neutron_wf = 30
+        #todo
 
     def _check_tantalus_installation(self):
         # check if tantalus is installed
@@ -76,8 +83,7 @@ class CreateROM:
 
             # merge all output folders into one
             # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
-            print(f"Merging FAM output files into folder: {self.working_directory.joinpath(OUTPUT_NAME)}")
-            combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+            self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
                                output_dir=self.working_directory.parent.parent.joinpath("_output"))
 
             self._clear_working_directory()
@@ -109,6 +115,9 @@ class CreateROM:
         else:
             self.working_directory.mkdir(parents=True, exist_ok=True)
 
+    def _check_snapshot_file(self):
+        return self.path_to_snapshot.exists()
+
     def _create_fam_runfiles(self, omegas_step, output_folder=""):
         """
         Create a FAM runfile for the given omegas
@@ -137,8 +146,8 @@ logdir_name="{output_folder}"
 OUT="V{iteration}"
 
 # Recompute dependent variables if needed
-nwn=30
-nwp=30
+nwn={self.num_neutron_wf}
+nwp={self.num_proton_wf}
 nbox=$(printf "%.0f" "$(echo "$size / $dx" | bc -l)")
 
 # Directories HARDCODED (REFERS TO TANTALUS)
@@ -169,7 +178,6 @@ cp $EXECDIR/$exefam          "$workdir"/
 cp $PARAMDIR/"$param.param"  "$workdir"/
 cd "$workdir"
 
-echo "Starting FAM calculation"
 # Create runtime data
 cat << EOF > fam.data
 &nucleus
@@ -214,8 +222,6 @@ EOF
 
 ./$exefam < fam.data > $famoutfile
 fam_check=$?
-
-cat "$famfile"
         """
             file.write_text(script, newline="\n")#, encoding="utf-8")#, newline="\n")
             file.chmod(0o755)
