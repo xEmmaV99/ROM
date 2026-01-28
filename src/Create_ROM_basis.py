@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from src.Utils import combine_FAM_output
 
-class CreateROM:
+class Create_ROM_basis:
     def __init__(self, path_to_meanfield_wf=None, p=10, n=10, w_min=0.0, w_max=50.0, smear=1.0, snapshots=20):
         self.num_proton = p
         self.num_neutron = n
@@ -29,18 +29,16 @@ class CreateROM:
         BASE_DIR = Path(__file__).resolve().parent
         self.working_directory = BASE_DIR.joinpath('work_dir')
         print(f"Working directory set to: {self.working_directory}")
+
+
         if path_to_meanfield_wf is None:
-            print("No meanfield path provided. No FAM runs will be launched.")
-            self.launch_FAM = False
+            #todo maybe check for validity?
+            raise Exception("No meanfield path provided. No FAM runs can be launched.")
         else:
             print("Meanfield path provided.")
             self._set_num_wf_from_meanfield()
-            if self._check_tantalus_installation():
-                print("Tantalus installation found.")
-                self.launch_FAM = True
-            else:
-                print("Tantalus installation not found. No FAM runs will be launched.")
-                self.launch_FAM = False
+            if self._check_tantalus_installation(): print("Tantalus installation found.")
+            else: raise Exception("Tantalus installation not found. No FAM runs can be launched.")
 
     def _set_num_wf_from_meanfield(self):
         self.num_proton_wf = 30
@@ -50,7 +48,7 @@ class CreateROM:
     def _check_tantalus_installation(self):
         # check if tantalus is installed
         self.TANTALUS_PATH = "$HOME/code/tantalus/"
-        return True
+        return True #todo check properly
 
     def build_snapshot_basis_static(self):
         self._clear_working_directory()
@@ -63,38 +61,31 @@ class CreateROM:
         if omegas is None:
             raise ValueError("No omegas defined for snapshot basis.")
 
-        if self.launch_FAM: # start FAM calculation
-            # output folder name
-            OUTPUT_NAME = "TMP_SNAPSHOTS"
+        # start FAM calculation
+        # output folder name
+        OUTPUT_NAME = "TMP_SNAPSHOTS"
 
-            fam_runfiles = self._create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
-            RUN_FAM = input("Do you want to launch the FAM calculation now? (y/n): ") == 'y'
+        fam_runfiles = self._create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
+        RUN_FAM = input("Do you want to launch the FAM calculation now? (y/n): ") == 'y'
 
-            for fam_runfile in fam_runfiles.iterdir():
-                ###  launch FAM with this runfile ###
-                # Convert Windows path to WSL path
-                wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
-                if RUN_FAM:
-                    subprocess.run(["bash", wsl_path], check=True)
-                else:
-                    print(f"FAM runfile created at {fam_runfile}. You can launch it manually later.")
+        for fam_runfile in fam_runfiles.iterdir():
+            ###  launch FAM with this runfile ###
+            # Convert Windows path to WSL path
+            wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
+            if RUN_FAM:
+                subprocess.run(["bash", wsl_path], check=True)
+            else:
+                print(f"FAM runfile created at {fam_runfile}. You can launch it manually later.")
 
-            print("FAM launch completed.")
+        print("FAM launch completed.")
 
-            # merge all output folders into one
-            # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
-            self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-                               output_dir=self.working_directory.parent.parent.joinpath("_output"))
+        # merge all output folders into one
+        # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
+        self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+                           output_dir=self.working_directory.parent.parent.joinpath("_output"))
 
-            self._clear_working_directory()
-            return
-
-        else:
-            print("FAM launch skipped due to missing Tantalus installation or meanfield path.")
-            print("Defined omegas for snapshot basis:")
-            for omega in omegas:
-                print(omega)
-            return
+        self._clear_working_directory()
+        pass
 
     def build_snapshot_basis_iterative(self):
         # make iterative basis. Each iteration, launch a new FAM calculation and automatically continue
@@ -216,7 +207,7 @@ smear={Imw}
 l=$l
 m=$m
 maxiter=10000
-fam_precision=1e-5
+fam_precision=5e-5
 /
 EOF
 

@@ -1,10 +1,10 @@
-from src.CreateROM import CreateROM
+from src.Create_ROM_basis import Create_ROM_basis
 from src.Utils import combine_FAM_output
 from pathlib import Path
 
 WAVE_FUNCTION = "$HOME/projects/tantalus_private/ssh_dump/MEANFIELD_OUT/wf.12.12.30.30"
 
-rom_builder = CreateROM(path_to_meanfield_wf=WAVE_FUNCTION,
+rom_builder = Create_ROM_basis(path_to_meanfield_wf=WAVE_FUNCTION,
                         p=12,
                         n=12,
                         w_min=0.0,
