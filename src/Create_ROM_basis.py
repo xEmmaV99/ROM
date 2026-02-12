@@ -46,13 +46,12 @@ class data:
         self.param_prefix = {"BSkG2": "BXL",
                              "BSkG5": "BXL-N2LO"}  # dict for parameterization prefixes @ tantalus specific
 
+    def set_FAM_parameters(self, param_dict):
         # FAM data
-        self.w_min = 0.0
-        self.w_max = 40.0
-        self.num_snapshots = 4
-        self.smear = 0.25
-        self.l = 0  # multipolarity
-        self.m = 0  # magnetic quantum number
+        for key in ['w_min', 'w_max', 'num_snapshots', 'smear', 'l', 'm']:
+            if key not in param_dict:
+                raise ValueError(f"Missing FAM parameter: {key}")
+            setattr(self, key, param_dict[key])
 
     def _parse_mf(self, file):
         # change linux path to windows path
@@ -83,9 +82,11 @@ class data:
 class ROM_builder:
     def __init__(self,
                  path_to_meanfield_wf,
-                 path_to_meanfield_out):
+                 path_to_meanfield_out,
+                 FAM):
 
         self.data = data(path_to_meanfield_out)
+        self.data.set_FAM_parameters(FAM)
 
         self.build_type = 'equidistant_1D'
         self.path_to_meanfield_wf = path_to_meanfield_wf
