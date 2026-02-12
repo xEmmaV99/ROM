@@ -1,95 +1,104 @@
 """
 For a given meanfield solution, start to build a ROM basis for the response function.
 """
+import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import numpy as np
+
 from src.Utils import combine_FAM_output
 
-class Create_ROM_basis:
-    def __init__(self, path_to_meanfield_wf=None, p=10, n=10, w_min=0.0, w_max=50.0, smear=1.0, snapshots=20):
-        self.num_proton = p
-        self.num_neutron = n
 
-        self.build_type = 'equidistant_1D'
-        self.w_min = np.real(w_min)
-        self.w_max = np.real(w_max)
+class ROM_basis:
+    def __init__(self):
+        self.omegas = None
+        self.snapshots = None # todo condsider merging omegas and  snapshots together
+        self.F = None
 
-        self.path_to_meanfield_wf = path_to_meanfield_wf
-        self.path_to_snapshot = Path("None")
-        self.num_snapshots = snapshots
+    def is_loaded(self):
+        return self.omegas is not None and self.snapshots is not None
+
+    def load(self, path_to_snapshot):
+        from src.ROM_parser import parse_XY_numba
+
+        # load snapshots and omegas from file
+        self.snapshots, self.omegas, self.F = parse_XY_numba(path_to_snapshot)
+
+
+class ROM_loader:
+    def __int__(self, path_to_snapshot):
+        self.omegas = None
+        self.snapshots = None
+        self.F = None
+
+
+class data:
+    def __init__(self, file):
+        parse = self._parse_mf(file)
+        self.num_proton = parse["num_proton"]
+        self.num_neutron = parse["num_neutron"]
+        self.num_proton_wf = parse["num_proton_wf"]
+        self.num_neutron_wf = parse["num_neutron_wf"]
+        self.param = parse["param"]
+
+
+        self.param_prefix = {"BSkG2": "BXL",
+                             "BSkG5": "BXL-N2LO"}  # dict for parameterization prefixes @ tantalus specific
+
+        # FAM data
+        self.w_min = 0.0
+        self.w_max = 40.0
+        self.num_snapshots = 4
+        self.smear = 0.25
         self.l = 0  # multipolarity
         self.m = 0  # magnetic quantum number
-        self.smear = smear  # default smearing width in MeV
 
-        ### tantalus specific parameters ###
-        self.param = "BSkG2"
-        self.param_prefix = {"BSkG2": "BXL"} # dict for parameterization prefixes @ tantalus specific
+    def _parse_mf(self, file):
+        # change linux path to windows path
+        text = Path(file.replace("/mnt/c/", "C:/")).read_text()
+
+        match = re.search(r"General Information\s*-+\s*(.*)", text, re.DOTALL)
+        if match:
+            text = match.group(1) # check below General Information
+
+        def grab(pattern, cast):
+            m = re.search(pattern, text)
+            if not m:
+                raise ValueError(f"Could not find pattern: {pattern}")
+            return cast(m.group(1))
+
+        return {
+            "num_neutron": grab(r"N =\s*([0-9]+)", int),
+            "num_proton": grab(r"Z =\s*([0-9]+)", int),
+            "num_neutron_wf": grab(r"nwn\s*=\s*(\d+)", int),
+            "num_proton_wf": grab(r"nwp\s*=\s*(\d+)", int),
+            "param": grab(r"Parameterization name\s+(\S+)", str),
+        }
+
+    @property
+    def prefix(self):
+        return self.param_prefix[self.param]
+
+class ROM_builder:
+    def __init__(self,
+                 path_to_meanfield_wf,
+                 path_to_meanfield_out):
+
+        self.data = data(path_to_meanfield_out)
+
+        self.build_type = 'equidistant_1D'
+        self.path_to_meanfield_wf = path_to_meanfield_wf
 
         BASE_DIR = Path(__file__).resolve().parent
         self.working_directory = BASE_DIR.joinpath('work_dir')
         print(f"Working directory set to: {self.working_directory}")
 
+        # todo maybe check if wf file is actually valid
+        if self._check_tantalus_installation(): print("Tantalus installation found.")
+        else: raise Exception("Tantalus installation not found. No FAM runs can be launched.")
 
-        if path_to_meanfield_wf is None:
-            #todo maybe check for validity?
-            raise Exception("No meanfield path provided. No FAM runs can be launched.")
-        else:
-            print("Meanfield path provided.")
-            self._set_num_wf_from_meanfield()
-            if self._check_tantalus_installation(): print("Tantalus installation found.")
-            else: raise Exception("Tantalus installation not found. No FAM runs can be launched.")
-
-    def _set_num_wf_from_meanfield(self):
-        self.num_proton_wf = 30
-        self.num_neutron_wf = 30
-        #todo
-
-    def _check_tantalus_installation(self):
-        # check if tantalus is installed
-        self.TANTALUS_PATH = "$HOME/code/tantalus/"
-        return True #todo check properly
-
-    def build_snapshot_basis_static(self):
-        self._clear_working_directory()
-
-        # static basis creation
-        omegas = None
-        if self.build_type == 'equidistant_1D':
-            omegas = np.linspace(self.w_min, self.w_max, num=self.num_snapshots) + self.smear * 1.j
-
-        if omegas is None:
-            raise ValueError("No omegas defined for snapshot basis.")
-
-        # start FAM calculation
-        # output folder name
-        OUTPUT_NAME = "TMP_SNAPSHOTS"
-
-        fam_runfiles = self._create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
-        RUN_FAM = input("Do you want to launch the FAM calculation now? (y/n): ") == 'y'
-
-        for fam_runfile in fam_runfiles.iterdir():
-            ###  launch FAM with this runfile ###
-            # Convert Windows path to WSL path
-            wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
-            if RUN_FAM:
-                subprocess.run(["bash", wsl_path], check=True)
-            else:
-                print(f"FAM runfile created at {fam_runfile}. You can launch it manually later.")
-
-        print("FAM launch completed.")
-
-        # merge all output folders into one
-        # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
-        self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-                           output_dir=self.working_directory.parent.parent.joinpath("_output"))
-
-        self._clear_working_directory()
-        pass
-
-    def build_snapshot_basis_iterative(self):
-        # make iterative basis. Each iteration, launch a new FAM calculation and automatically continue
-        raise NotImplementedError
+        self.path_to_snapshot = None # to be set
 
     def _clear_working_directory(self):
         """
@@ -113,6 +122,7 @@ class Create_ROM_basis:
         """
         Create a FAM runfile for the given omegas
         """
+        d = self.data
         run_folder = self.working_directory.joinpath('tmp')
         run_folder.mkdir(parents=True, exist_ok=True)
         for iteration, omega in enumerate(omegas_step):
@@ -121,24 +131,22 @@ class Create_ROM_basis:
             file = run_folder.joinpath(f"fam_run{Rew}+{Imw}j.sh")
             file.parent.mkdir(parents=True, exist_ok=True)
 
-            # it is probably easier to create a file for each omega and then merge all together
-
             script = f"""\
 #!/usr/bin/env bash
-neutrons={self.num_neutron}
-protons={self.num_proton}
+neutrons={d.num_neutron}
+protons={d.num_proton}
 dx=0.8
 size=16
-l={self.l}
-m={self.m}
-param="{self.param}"
-pref="{self.param_prefix[self.param]}"
+l={d.l}
+m={d.m}
+param="{d.param}"
+pref="{d.prefix}"
 logdir_name="{output_folder}"
 OUT="V{iteration}"
 
 # Recompute dependent variables if needed
-nwn={self.num_neutron_wf}
-nwp={self.num_proton_wf}
+nwn={d.num_neutron_wf}
+nwp={d.num_proton_wf}
 nbox=$(printf "%.0f" "$(echo "$size / $dx" | bc -l)")
 
 # Directories HARDCODED (REFERS TO TANTALUS)
@@ -155,13 +163,10 @@ xyfile="../$logdir_name/xy.$protons.$neutrons.$nwn.$nwp.$dx.xy$OUT"
 exe="Tantalus.$pref.exe"              # full name of the mean-field executable
 exefam="fam.$pref.exe"                # full name of the fam executable
 param="$param"                         # name of the parameterization
-workdir="src/work_dir/work.$protons.$neutrons.$size.$nwn.$nwp"
+workdir="src/work_dir/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
 
 if [ ! -d "$workdir/" ]; then
   mkdir "$workdir"
-fi
-if [ ! -d "src/work_dir/$logdir_name/" ]; then
-  mkdir "src/work_dir/$logdir_name"
 fi
 
 cp $EXECDIR/$exe             "$workdir"/
@@ -207,14 +212,78 @@ smear={Imw}
 l=$l
 m=$m
 maxiter=10000
-fam_precision=5e-5
+fam_precision=1e-6
 /
 EOF
 
 ./$exefam < fam.data > $famoutfile
 fam_check=$?
         """
-            file.write_text(script, newline="\n")#, encoding="utf-8")#, newline="\n")
+            file.write_text(script, newline="\n")  # , encoding="utf-8")#, newline="\n")
             file.chmod(0o755)
 
         return run_folder
+
+    def _check_tantalus_installation(self):
+        # check if tantalus is installed
+        self.TANTALUS_PATH = "$HOME/code/tantalus/"
+        return True #todo check properly
+
+    def build_snapshot_basis_static(self, max_workers=4):
+        d = self.data
+        self._clear_working_directory()
+
+        # static basis creation
+        omegas = None
+        if self.build_type == 'equidistant_1D':
+            omegas = np.linspace(d.w_min, d.w_max, num=d.num_snapshots) + d.smear * 1.j
+
+        if omegas is None:
+            raise ValueError("No omegas defined for snapshot basis.")
+
+        # start FAM calculation
+        # output folder name
+        OUTPUT_NAME = "TMP_SNAPSHOTS"
+
+        fam_runfiles = self._create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
+        RUN_FAM = input("Do you want to launch the FAM calculation now? (y/n): ") == 'y'
+
+        # for fam_runfile in fam_runfiles.iterdir():
+        #     ###  launch FAM with this runfile ###
+        #     # Convert Windows path to WSL path
+        #     wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
+        #     if RUN_FAM:
+        #         print(f"Launching FAM with runfile: {fam_runfile}")
+        #         subprocess.run(["bash", wsl_path], check=True)
+        #     else:
+        #         print(f"FAM runfile created at {fam_runfile}. You can launch it manually later.")
+
+        base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
+        base_dir.mkdir(parents=True, exist_ok=True)
+
+        def launch_fam(fam_runfile: Path):
+            # Convert Windows path to WSL path
+            wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
+            if RUN_FAM:
+                print(f"Launching FAM with runfile: {fam_runfile}")
+                subprocess.run(["bash", wsl_path], check=True)
+            else:
+                print(f"FAM runfile created at {fam_runfile}. You can launch it manually later.")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            executor.map(launch_fam, fam_runfiles.iterdir())
+
+        print("FAM launch completed.")
+
+        # merge all output folders into one
+        # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
+        if RUN_FAM:
+            self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+                               output_dir=self.working_directory.parent.parent.joinpath("_output"))
+
+            self._clear_working_directory()
+        pass
+
+    def build_snapshot_basis_iterative(self):
+        # make iterative basis. Each iteration, launch a new FAM calculation and automatically continue
+        raise NotImplementedError
+
