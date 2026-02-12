@@ -20,18 +20,9 @@ class ROM_basis:
         return self.omegas is not None and self.snapshots is not None
 
     def load(self, path_to_snapshot):
-        from src.ROM_parser import parse_XY_numba
-
+        from src.Utils import parse_XY_numba
         # load snapshots and omegas from file
         self.snapshots, self.omegas, self.F = parse_XY_numba(path_to_snapshot)
-
-
-class ROM_loader:
-    def __int__(self, path_to_snapshot):
-        self.omegas = None
-        self.snapshots = None
-        self.F = None
-
 
 class data:
     def __init__(self, file):
@@ -285,6 +276,10 @@ fam_check=$?
         pass
 
     def build_snapshot_basis_iterative(self):
+
+
+
+
         # make iterative basis. Each iteration, launch a new FAM calculation and automatically continue
         raise NotImplementedError
 

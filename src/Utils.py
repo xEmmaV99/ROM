@@ -6,8 +6,6 @@ from pathlib import Path
 
 @njit(inline='always', cache=True)
 def _skip_ws(data, ptr, n):
-    """Skips spaces (32), tabs (9), newlines (10, 13)."""
-    # Thanks Gemini
     while ptr < n and (data[ptr] == 32 or data[ptr] == 9 or
                        data[ptr] == 10 or data[ptr] == 13):
         ptr += 1
@@ -16,7 +14,6 @@ def _skip_ws(data, ptr, n):
 
 @njit(inline='always', cache=True)
 def _parse_int(data, ptr, n):
-    # Thanks Gemini
     ptr = _skip_ws(data, ptr, n)
     if ptr >= n: return 0, ptr
 
@@ -40,7 +37,6 @@ def _parse_int(data, ptr, n):
 
 @njit(inline='always', cache=True)
 def _parse_float(data, ptr, n):
-    # Thanks Gemini
     ptr = _skip_ws(data, ptr, n)
     if ptr >= n: return 0.0, ptr
 
@@ -245,9 +241,6 @@ def parse_XY_numba(filename, sparse_bool=True, return_idx=False):
     if not sparse_bool:
         raise NotImplementedError("Not implemented")
 
-    #if not filename.endswith(".xy"):
-    #    raise ValueError("filename must end with .xy")
-
     with open(filename, 'rb') as f:
         raw_data = f.read()
 
@@ -438,5 +431,4 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
     concat_fam_files(directory)
     out_file = concat_xy_files(directory)
 
-    # return name
     return Path(out_file)
