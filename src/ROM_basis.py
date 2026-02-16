@@ -6,7 +6,8 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import numpy as np
-from src.Utils import combine_FAM_output, parse_XY_numba, _evaluate_PG_numba_coef, cost_numba
+from src.Utils_basis import cost_numba, _evaluate_PG_numba_coef
+from src.Utils_parsers import parse_XY_numba, combine_FAM_output
 
 class ROM_basis:
     def __init__(self):

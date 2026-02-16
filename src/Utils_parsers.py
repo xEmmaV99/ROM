@@ -1,138 +1,6 @@
+from pathlib import Path
 import numpy as np
 from numba import njit
-from numba.typed import List
-from pathlib import Path
-from numba import prange
-from pasta.augment.import_utils import remove_duplicates
-
-
-@njit(fastmath=True, cache=True)
-def cost_numba(omega, alpha, FdF, MXdF, XMMX, snapshot_omegas):
-    alpha_flat = alpha.ravel()
-    MXdF_flat = MXdF.ravel()
-    n = len(alpha_flat)
-
-    v = np.zeros(n, dtype=np.complex128)
-    sum_alpha = 0.0 + 0.0j
-
-    for i in range(n):
-        val = alpha_flat[i]
-        sum_alpha += val
-        v[i] = val * (snapshot_omegas[i] - omega)
-
-    c_F = 1.0 - sum_alpha
-
-    term_FF = (np.abs(c_F) ** 2) * FdF
-
-    term_XX = 0.0 + 0.0j
-    for i in range(n):
-        mat_vec_dot = 0.0 + 0.0j
-        for j in range(n):
-            mat_vec_dot += XMMX[i, j] * v[j]
-
-        term_XX += np.conj(v[i]) * mat_vec_dot
-
-    cross_part = 0.0 + 0.0j
-    for i in range(n):
-        cross_part += np.conj(v[i]) * MXdF_flat[i]
-
-    term_cross_A = c_F * cross_part
-    real_cross = 2.0 * term_cross_A.real
-
-    return term_FF.real + term_XX.real + real_cross
-
-@njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_G_numba(targets, snapshot_omegas, D, M, overlap_weights):
-    n_targets = len(targets)
-    n_snaps = len(snapshot_omegas)
-    S = np.zeros(n_targets, dtype=np.float64)
-    b = -D.copy()
-    for w in prange(n_targets):
-        omega_target = targets[w]
-        delta = snapshot_omegas - omega_target
-
-        # if omega is part of the snapshot... G breaks...
-        min_dist_idx = -1
-        min_dist = 1e20
-        for i in range(n_snaps):
-            dist = np.abs(delta[i])
-            if dist < min_dist:
-                min_dist = dist
-                min_dist_idx = i
-        if min_dist < 1e-12:
-            val = overlap_weights[min_dist_idx]
-            S[w] = -2 * val.imag / np.pi
-        else:
-            A = np.zeros((n_snaps, n_snaps), dtype=np.complex128)
-            for i in range(n_snaps):
-                for j in range(n_snaps):
-                    A[i, j] = -D[i] + M[i, j] * delta[j]
-
-            C = np.linalg.solve(A, b)
-            dot_val = 0.0 + 0.0j
-            for k in range(n_snaps):
-                dot_val += C[k] * overlap_weights[k]
-            S[w] = -2 * dot_val.imag / np.pi
-    return S
-
-@njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_PG_numba(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX, overlap_weights):
-    n_targets = len(targets)
-    n_snaps = len(snapshot_omegas)
-    S = np.zeros(n_targets, dtype=np.float64)
-
-    for w in prange(n_targets):
-        omega_target = targets[w]
-        delta = snapshot_omegas - omega_target
-        b = np.zeros(n_snaps, dtype=np.complex128)
-        for i in range(n_snaps):
-            b[i] = FdF - (delta[i] * FdMX[i])
-        A = np.zeros((n_snaps, n_snaps), dtype=np.complex128)
-        for i in range(n_snaps):
-            d_conj_i = np.conj(delta[i])
-            for j in range(n_snaps):
-                val = FdF
-                val -= delta[i] * FdMX[i]
-                val += d_conj_i * delta[j] * XMMX[i, j]
-                val -= np.conj(delta[j]) * MXdF[j]
-                A[i, j] = val
-
-        C = np.linalg.solve(A, b)
-
-        dot_val = 0.0 + 0.0j
-        for k in range(n_snaps):
-            dot_val += C[k] * overlap_weights[k]
-
-        S[w] = -2 * dot_val.imag / np.pi
-
-    return S
-
-@njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_PG_numba_coef(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX):
-    n_targets = len(targets)
-    n_snaps = len(snapshot_omegas)
-    C_list = np.zeros((len(targets), n_snaps), dtype=np.complex128)
-
-    for w in prange(n_targets):
-        omega_target = targets[w]
-        delta = snapshot_omegas - omega_target
-        b = np.zeros(n_snaps, dtype=np.complex128)
-        for i in range(n_snaps):
-            b[i] = FdF - (delta[i] * FdMX[i])
-        A = np.zeros((n_snaps, n_snaps), dtype=np.complex128)
-        for i in range(n_snaps):
-            d_conj_i = np.conj(delta[i])
-            for j in range(n_snaps):
-                val = FdF
-                val -= delta[i] * FdMX[i]
-                val += d_conj_i * delta[j] * XMMX[i, j]
-                val -= np.conj(delta[j]) * MXdF[j]
-                A[i, j] = val
-
-        C = np.linalg.solve(A, b)
-        C_list[w, :] = C.flatten()
-
-    return C_list
 
 @njit(inline='always', cache=True)
 def _skip_ws(data, ptr, n):
@@ -365,10 +233,7 @@ def _fill_pass(data, nwn, idx_map, RESULT, F_data, omegas):
         while ptr < n and data[ptr] != 10: ptr += 1
 
 
-def parse_XY_numba(filename, sparse_bool=True, return_idx=False):
-    if not sparse_bool:
-        raise NotImplementedError("Not implemented")
-
+def parse_XY_numba(filename, return_idx=False):
     with open(filename, 'rb') as f:
         raw_data = f.read()
 
@@ -516,7 +381,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
 
             if output_name == '':
                 out = output_dir.joinpath(file_path.split('\\')[-1].split('.xy')[0]+'.xy')
-            else: 
+            else:
                 out = output_dir.joinpath('xy.' + output_name + '.xy')
             with open(out, "w") as out:
                 out.writelines(all_header)

@@ -1,5 +1,5 @@
 import numpy as np
-from src.Utils import _evaluate_G_numba, _evaluate_PG_numba
+from src.Utils_emulator import _evaluate_G_numba, _evaluate_PG_numba
 from src.ROM_basis import ROM_basis
 
 class Emulator:
