@@ -5,7 +5,7 @@ from src.ROM_basis import ROM_basis
 class Emulator:
     def __init__(self, basis: ROM_basis):
         self.basis = basis # ROM_basis object
-        self.projection_method = "G" # or "G"
+        self.projection_method = "PG" # or "G"
 
     def evaluate(self, targets):
         import time

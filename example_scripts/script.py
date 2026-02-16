@@ -17,6 +17,7 @@ rom_builder = ROM_builder(path_to_meanfield_wf=WAVE_FUNCTION,
                           path_to_meanfield_out=MF_OUT,
                           FAM=FAM_INPUT)
 
+rom_builder.build_type = 'greedy'
 rom_builder.data.num_snapshots = 14 #override
 
 # LOAD if it already exists
@@ -24,7 +25,7 @@ path_to_snapshot = 'C:/users/emmav/PycharmProjects/ROM/_output/xy.12.12.30.30.2.
 rom_builder.basis.load(path_to_snapshot)
 
 #rom_builder.build_snapshot_basis_static(max_workers=8)
-rom_builder.build_snapshot_basis_iterative()
+rom_builder.build_snapshot_basis()
 
 path_to_snapshot = rom_builder.path_to_snapshot
 

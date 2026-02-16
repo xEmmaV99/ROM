@@ -238,165 +238,279 @@ fam_check=$?
         self.TANTALUS_PATH = "$HOME/code/tantalus/"
         return True #todo check properly
 
-    def build_snapshot_basis_static(self, max_workers=4):
-        if self.basis.is_loaded():
-            raise AssertionError("basis already loaded. Cannot initiate equidistant sampling.")
-
-        d = self.data
-        self._clear_working_directory()
-
-        # static basis creation
-        omegas = None
-        if self.build_type == 'equidistant_1D':
-            omegas = np.linspace(d.w_min, d.w_max, num=d.num_snapshots) + d.smear * 1.j
-
-        if omegas is None:
-            raise ValueError("No omegas defined for snapshot basis.")
-
-        # start FAM calculation
-        # output folder name
-        OUTPUT_NAME = "TMP_SNAPSHOTS"
-
-        fam_runfiles = self._create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
-        RUN_FAM = input("Do you want to launch the FAM calculation now? (y/n): ") == 'y'
-
-        # for fam_runfile in fam_runfiles.iterdir():
-        #     ###  launch FAM with this runfile ###
-        #     # Convert Windows path to WSL path
-        #     wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
-        #     if RUN_FAM:
-        #         print(f"Launching FAM with runfile: {fam_runfile}")
-        #         subprocess.run(["bash", wsl_path], check=True)
-        #     else:
-        #         print(f"FAM runfile created at {fam_runfile}. You can launch it manually later.")
-
-        base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
-        base_dir.mkdir(parents=True, exist_ok=True)
-
-        def launch_fam(fam_runfile: Path):
-            # Convert Windows path to WSL path
-            wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
-            if RUN_FAM:
-                print(f"Launching FAM with runfile: {fam_runfile}")
-                subprocess.run(["bash", wsl_path], check=True)
-            else:
-                print(f"FAM runfile created at {fam_runfile}. You can launch it manually later.")
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            executor.map(launch_fam, fam_runfiles.iterdir())
-
-        print("FAM launch completed.")
-
-        # merge all output folders into one
-        # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
-        if RUN_FAM:
-            self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-                               output_dir=self.working_directory.parent.parent.joinpath("_output"))
-
-            self._clear_working_directory()
-
-        self.basis.load(self.path_to_snapshot)
-        print("Basis loaded.")
-
-    def build_snapshot_basis_iterative(self):
-        '''
-        Greedy algorithm based on the residuals of the reconstructed S response, see J. Hesthaven; doi: 10.1007/978-3-319-22470-1
-        '''
-        # initialisation, construct first basis with 2 snapshots
+    def build_snapshot_basis(self, max_workers=4, build_type=None):
         def launch_fam(fam_runfile):
             # Convert Windows path to WSL path
             wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
             print(f"Launching FAM with runfile: {fam_runfile}")
             subprocess.run(["bash", wsl_path], check=True)
+        if build_type is not None:
+            self.build_type = build_type
 
         d = self.data
         self._clear_working_directory()
-
         OUTPUT_NAME = "TMP_SNAPSHOTS"
 
-        W_scan = np.linspace(d.w_min, d.w_max, num=2000) + d.smear * 1.j
-        if not self.basis.is_loaded():
-            initial_vectors = 2
-            # choose two snapshots, say at 0.25 and 0.75 from the spectrum
-            w1 = 0.25*(d.w_max - d.w_min) + d.smear * 1.j
-            w2 = 0.75*(d.w_max - d.w_min) + d.smear * 1.j
 
-            # initiate two FAM runs
-            fam_runfiles = self._create_fam_runfiles([w1,w2], output_folder=OUTPUT_NAME)
+        if self.build_type == 'equidistant_1D':
+            # static basis creation
+            omegas = np.linspace(d.w_min, d.w_max, num=d.num_snapshots) + d.smear * 1.j
+            if self.basis.is_loaded():
+                raise AssertionError("Basis already loaded. Cannot initiate equidistant sampling.")
+
+            fam_runfiles = self._create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
+
             base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
             base_dir.mkdir(parents=True, exist_ok=True)
 
-            with ThreadPoolExecutor(max_workers=2) as executor:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 executor.map(launch_fam, fam_runfiles.iterdir())
 
-            print("Initial FAM launch completed.")
+            print("FAM launch completed.")
+
             self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-                                                  output_dir=self.working_directory.parent.parent.joinpath("_output"),
-                                                  output_name='')
-        else:
-            initial_vectors = len(self.basis.omegas)
-            print(f"Initial basis loaded. Continuing to add {self.data.num_snapshots-initial_vectors} vectors")
+                                                       output_dir=self.working_directory.parent.parent.joinpath(
+                                                           "_output"))
 
-        snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)
+        elif self.build_type == 'greedy':
+            # iterative basis creation
+            W_scan = np.linspace(d.w_min, d.w_max, num=2000) + d.smear * 1.j
+            if not self.basis.is_loaded():
+                initial_vectors = 2
+                # choose two snapshots, say at 0.25 and 0.75 from the spectrum
+                w1 = 0.25*(d.w_max - d.w_min) + d.smear * 1.j
+                w2 = 0.75*(d.w_max - d.w_min) + d.smear * 1.j
 
-        ### greedy loop
-        FdF = F.conj().T @ F
+                # initiate two FAM runs
+                fam_runfiles = self._create_fam_runfiles([w1,w2], output_folder=OUTPUT_NAME)
+                base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
+                base_dir.mkdir(parents=True, exist_ok=True)
 
-        for k in range(initial_vectors, d.num_snapshots): #todo consider adding value threshold instead fo num snap, or both
-            COSTS = np.zeros(len(W_scan))
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    executor.map(launch_fam, fam_runfiles.iterdir())
 
-            X = snapshots[:, 0, :]
-            Y = snapshots[:, 1, :]
-
-            print(X.shape, Y.shape)
-            diff_XY = X - Y
-            MXdF = diff_XY.conj() @ F
-            FdMX = MXdF.conj()
-            XMMX = X.conj() @ X.T + Y.conj() @ Y.T
-
-            # if projection_method=="PG":
-
-            alphas = _evaluate_PG_numba_coef(W_scan, snapshot_omegas, FdF, FdMX, MXdF, XMMX)
-
-            for idx, omega_test in enumerate(W_scan):
-                alpha = alphas[idx]
-
-                COSTS[idx] = cost_numba(omega=omega_test,
-                                  alpha=alpha,
-                                  FdF=FdF, MXdF=MXdF, XMMX=XMMX,
-                                  snapshot_omegas=snapshot_omegas)
-
-            # ADD NEW SNAPSHOT WITH MAX COST
-            if len(snapshot_omegas) >= d.num_snapshots:
-                print("Number of snapshots reached")
-                break
-            max_cost_idx = np.argmax(COSTS)
-
-            print('Initiating new FAM run for new snapshot: ', W_scan[max_cost_idx])
-            # launch new FAM run for new snapshot
-            fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]], output_folder=OUTPUT_NAME, global_iteration=k+1)
-            base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
-            base_dir.mkdir(parents=True, exist_ok=True)
-
-            launch_fam(fam_runfile)
-            print("FAM launch completed for new snapshot.")
-
-            # merge files and read new snapshot
-            if self.basis.is_loaded():
-                out_name = self.path_to_snapshot.split('xy')[-2][1:-1]
+                print("Initial FAM launch completed.")
+                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+                                                      output_dir=self.working_directory.parent.parent.joinpath("_output"),
+                                                      output_name='')
             else:
-                out_name = ''
+                initial_vectors = len(self.basis.omegas)
+                print(f"Initial basis loaded. Continuing to add {self.data.num_snapshots-initial_vectors} vectors")
 
-            self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-                                                   output_dir=self.working_directory.parent.parent.joinpath("_output"),
-                                                    output_name=out_name)
+            snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)
 
-            snapshots, snapshot_omegas, _ = parse_XY_numba(self.path_to_snapshot) # update
+            ### greedy loop
+            FdF = F.conj().T @ F
+            for k in range(initial_vectors, d.num_snapshots): #todo consider adding value threshold instead fo num snap, or both
+                COSTS = np.zeros(len(W_scan))
 
-        # final step, save output and clean up wd
-        self.basis.load(self.path_to_snapshot)
+                X = snapshots[:, 0, :]
+                Y = snapshots[:, 1, :]
 
+                print(X.shape, Y.shape)
+                diff_XY = X - Y
+                MXdF = diff_XY.conj() @ F
+                FdMX = MXdF.conj()
+                XMMX = X.conj() @ X.T + Y.conj() @ Y.T
+
+                # if projection_method=="PG":
+
+                alphas = _evaluate_PG_numba_coef(W_scan, snapshot_omegas, FdF, FdMX, MXdF, XMMX)
+
+                for idx, omega_test in enumerate(W_scan):
+                    alpha = alphas[idx]
+
+                    COSTS[idx] = cost_numba(omega=omega_test,
+                                      alpha=alpha,
+                                      FdF=FdF, MXdF=MXdF, XMMX=XMMX,
+                                      snapshot_omegas=snapshot_omegas)
+
+                # ADD NEW SNAPSHOT WITH MAX COST
+                if len(snapshot_omegas) >= d.num_snapshots:
+                    print("Number of snapshots reached")
+                    break
+                max_cost_idx = np.argmax(COSTS)
+
+                print('Initiating new FAM run for new snapshot: ', W_scan[max_cost_idx])
+                # launch new FAM run for new snapshot
+                fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]], output_folder=OUTPUT_NAME, global_iteration=k+1)
+                base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
+                base_dir.mkdir(parents=True, exist_ok=True)
+
+                launch_fam(fam_runfile)
+                print("FAM launch completed for new snapshot.")
+
+                # merge files and read new snapshot
+                if self.basis.is_loaded():
+                    out_name = str(self.path_to_snapshot).split('xy')[-2][1:-1]
+                else:
+                    out_name = ''
+
+                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+                                                       output_dir=self.working_directory.parent.parent.joinpath("_output"),
+                                                        output_name=out_name)
+
+                snapshots, snapshot_omegas, _ = parse_XY_numba(self.path_to_snapshot) # update
+
+        else:
+            raise ValueError("Unknown build type.")
+
+        # clean up and load basis
         self._clear_working_directory()
-        pass
+        self.basis.load(self.path_to_snapshot)
+        print("Basis loaded.")
+        return
+
+
+    # def build_snapshot_basis_static(self, max_workers=4):
+    #     if self.basis.is_loaded():
+    #         raise AssertionError("basis already loaded. Cannot initiate equidistant sampling.")
+    #
+    #     d = self.data
+    #     self._clear_working_directory()
+    #
+    #     # static basis creation
+    #     omegas = None
+    #     if self.build_type == 'equidistant_1D':
+    #         omegas = np.linspace(d.w_min, d.w_max, num=d.num_snapshots) + d.smear * 1.j
+    #
+    #     if omegas is None:
+    #         raise ValueError("No omegas defined for snapshot basis.")
+    #
+    #     # start FAM calculation
+    #     # output folder name
+    #     OUTPUT_NAME = "TMP_SNAPSHOTS"
+    #
+    #     fam_runfiles = self._create_fam_runfiles(omegas, output_folder=OUTPUT_NAME)
+    #     RUN_FAM = input("Do you want to launch the FAM calculation now? (y/n): ") == 'y'
+    #
+    #     base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
+    #     base_dir.mkdir(parents=True, exist_ok=True)
+    #
+    #     def launch_fam(fam_runfile: Path):
+    #         # Convert Windows path to WSL path
+    #         wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
+    #         if RUN_FAM:
+    #             print(f"Launching FAM with runfile: {fam_runfile}")
+    #             subprocess.run(["bash", wsl_path], check=True)
+    #         else:
+    #             print(f"FAM runfile created at {fam_runfile}. You can launch it manually later.")
+    #     with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    #         executor.map(launch_fam, fam_runfiles.iterdir())
+    #
+    #     print("FAM launch completed.")
+    #
+    #     # merge all output folders into one
+    #     # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
+    #     if RUN_FAM:
+    #         self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+    #                            output_dir=self.working_directory.parent.parent.joinpath("_output"))
+    #
+    #         self._clear_working_directory()
+    #
+    #     self.basis.load(self.path_to_snapshot)
+    #     print("Basis loaded.")
+    #
+    # def build_snapshot_basis_iterative(self):
+    #     '''
+    #     Greedy algorithm based on the residuals of the reconstructed S response, see J. Hesthaven; doi: 10.1007/978-3-319-22470-1
+    #     '''
+    #     # initialisation, construct first basis with 2 snapshots
+    #     def launch_fam(fam_runfile):
+    #         # Convert Windows path to WSL path
+    #         wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
+    #         print(f"Launching FAM with runfile: {fam_runfile}")
+    #         subprocess.run(["bash", wsl_path], check=True)
+    #
+    #     d = self.data
+    #     self._clear_working_directory()
+    #
+    #     OUTPUT_NAME = "TMP_SNAPSHOTS"
+    #
+    #     W_scan = np.linspace(d.w_min, d.w_max, num=2000) + d.smear * 1.j
+    #     if not self.basis.is_loaded():
+    #         initial_vectors = 2
+    #         # choose two snapshots, say at 0.25 and 0.75 from the spectrum
+    #         w1 = 0.25*(d.w_max - d.w_min) + d.smear * 1.j
+    #         w2 = 0.75*(d.w_max - d.w_min) + d.smear * 1.j
+    #
+    #         # initiate two FAM runs
+    #         fam_runfiles = self._create_fam_runfiles([w1,w2], output_folder=OUTPUT_NAME)
+    #         base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
+    #         base_dir.mkdir(parents=True, exist_ok=True)
+    #
+    #         with ThreadPoolExecutor(max_workers=2) as executor:
+    #             executor.map(launch_fam, fam_runfiles.iterdir())
+    #
+    #         print("Initial FAM launch completed.")
+    #         self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+    #                                               output_dir=self.working_directory.parent.parent.joinpath("_output"),
+    #                                               output_name='')
+    #     else:
+    #         initial_vectors = len(self.basis.omegas)
+    #         print(f"Initial basis loaded. Continuing to add {self.data.num_snapshots-initial_vectors} vectors")
+    #
+    #     snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)
+    #
+    #     ### greedy loop
+    #     FdF = F.conj().T @ F
+    #
+    #     for k in range(initial_vectors, d.num_snapshots): #todo consider adding value threshold instead fo num snap, or both
+    #         COSTS = np.zeros(len(W_scan))
+    #
+    #         X = snapshots[:, 0, :]
+    #         Y = snapshots[:, 1, :]
+    #
+    #         print(X.shape, Y.shape)
+    #         diff_XY = X - Y
+    #         MXdF = diff_XY.conj() @ F
+    #         FdMX = MXdF.conj()
+    #         XMMX = X.conj() @ X.T + Y.conj() @ Y.T
+    #
+    #         # if projection_method=="PG":
+    #
+    #         alphas = _evaluate_PG_numba_coef(W_scan, snapshot_omegas, FdF, FdMX, MXdF, XMMX)
+    #
+    #         for idx, omega_test in enumerate(W_scan):
+    #             alpha = alphas[idx]
+    #
+    #             COSTS[idx] = cost_numba(omega=omega_test,
+    #                               alpha=alpha,
+    #                               FdF=FdF, MXdF=MXdF, XMMX=XMMX,
+    #                               snapshot_omegas=snapshot_omegas)
+    #
+    #         # ADD NEW SNAPSHOT WITH MAX COST
+    #         if len(snapshot_omegas) >= d.num_snapshots:
+    #             print("Number of snapshots reached")
+    #             break
+    #         max_cost_idx = np.argmax(COSTS)
+    #
+    #         print('Initiating new FAM run for new snapshot: ', W_scan[max_cost_idx])
+    #         # launch new FAM run for new snapshot
+    #         fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]], output_folder=OUTPUT_NAME, global_iteration=k+1)
+    #         base_dir = Path(f"src/work_dir/{OUTPUT_NAME}")
+    #         base_dir.mkdir(parents=True, exist_ok=True)
+    #
+    #         launch_fam(fam_runfile)
+    #         print("FAM launch completed for new snapshot.")
+    #
+    #         # merge files and read new snapshot
+    #         if self.basis.is_loaded():
+    #             out_name = self.path_to_snapshot.split('xy')[-2][1:-1]
+    #         else:
+    #             out_name = ''
+    #
+    #         self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+    #                                                output_dir=self.working_directory.parent.parent.joinpath("_output"),
+    #                                                 output_name=out_name)
+    #
+    #         snapshots, snapshot_omegas, _ = parse_XY_numba(self.path_to_snapshot) # update
+    #
+    #     # final step, save output and clean up wd
+    #     self.basis.load(self.path_to_snapshot)
+    #
+    #     self._clear_working_directory()
+    #     pass
 
     def load(self, path_to_snapshot):
         from src.Utils import parse_XY_numba
