@@ -2,7 +2,137 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 from pathlib import Path
+from numba import prange
+from pasta.augment.import_utils import remove_duplicates
 
+
+@njit(fastmath=True, cache=True)
+def cost_numba(omega, alpha, FdF, MXdF, XMMX, snapshot_omegas):
+    alpha_flat = alpha.ravel()
+    MXdF_flat = MXdF.ravel()
+    n = len(alpha_flat)
+
+    v = np.zeros(n, dtype=np.complex128)
+    sum_alpha = 0.0 + 0.0j
+
+    for i in range(n):
+        val = alpha_flat[i]
+        sum_alpha += val
+        v[i] = val * (snapshot_omegas[i] - omega)
+
+    c_F = 1.0 - sum_alpha
+
+    term_FF = (np.abs(c_F) ** 2) * FdF
+
+    term_XX = 0.0 + 0.0j
+    for i in range(n):
+        mat_vec_dot = 0.0 + 0.0j
+        for j in range(n):
+            mat_vec_dot += XMMX[i, j] * v[j]
+
+        term_XX += np.conj(v[i]) * mat_vec_dot
+
+    cross_part = 0.0 + 0.0j
+    for i in range(n):
+        cross_part += np.conj(v[i]) * MXdF_flat[i]
+
+    term_cross_A = c_F * cross_part
+    real_cross = 2.0 * term_cross_A.real
+
+    return term_FF.real + term_XX.real + real_cross
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _evaluate_G_numba(targets, snapshot_omegas, D, M, overlap_weights):
+    n_targets = len(targets)
+    n_snaps = len(snapshot_omegas)
+    S = np.zeros(n_targets, dtype=np.float64)
+    b = -D.copy()
+    for w in prange(n_targets):
+        omega_target = targets[w]
+        delta = snapshot_omegas - omega_target
+
+        # if omega is part of the snapshot... G breaks...
+        min_dist_idx = -1
+        min_dist = 1e20
+        for i in range(n_snaps):
+            dist = np.abs(delta[i])
+            if dist < min_dist:
+                min_dist = dist
+                min_dist_idx = i
+        if min_dist < 1e-12:
+            val = overlap_weights[min_dist_idx]
+            S[w] = -2 * val.imag / np.pi
+        else:
+            A = np.zeros((n_snaps, n_snaps), dtype=np.complex128)
+            for i in range(n_snaps):
+                for j in range(n_snaps):
+                    A[i, j] = -D[i] + M[i, j] * delta[j]
+
+            C = np.linalg.solve(A, b)
+            dot_val = 0.0 + 0.0j
+            for k in range(n_snaps):
+                dot_val += C[k] * overlap_weights[k]
+            S[w] = -2 * dot_val.imag / np.pi
+    return S
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _evaluate_PG_numba(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX, overlap_weights):
+    n_targets = len(targets)
+    n_snaps = len(snapshot_omegas)
+    S = np.zeros(n_targets, dtype=np.float64)
+
+    for w in prange(n_targets):
+        omega_target = targets[w]
+        delta = snapshot_omegas - omega_target
+        b = np.zeros(n_snaps, dtype=np.complex128)
+        for i in range(n_snaps):
+            b[i] = FdF - (delta[i] * FdMX[i])
+        A = np.zeros((n_snaps, n_snaps), dtype=np.complex128)
+        for i in range(n_snaps):
+            d_conj_i = np.conj(delta[i])
+            for j in range(n_snaps):
+                val = FdF
+                val -= delta[i] * FdMX[i]
+                val += d_conj_i * delta[j] * XMMX[i, j]
+                val -= np.conj(delta[j]) * MXdF[j]
+                A[i, j] = val
+
+        C = np.linalg.solve(A, b)
+
+        dot_val = 0.0 + 0.0j
+        for k in range(n_snaps):
+            dot_val += C[k] * overlap_weights[k]
+
+        S[w] = -2 * dot_val.imag / np.pi
+
+    return S
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _evaluate_PG_numba_coef(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX):
+    n_targets = len(targets)
+    n_snaps = len(snapshot_omegas)
+    C_list = np.zeros((len(targets), n_snaps), dtype=np.complex128)
+
+    for w in prange(n_targets):
+        omega_target = targets[w]
+        delta = snapshot_omegas - omega_target
+        b = np.zeros(n_snaps, dtype=np.complex128)
+        for i in range(n_snaps):
+            b[i] = FdF - (delta[i] * FdMX[i])
+        A = np.zeros((n_snaps, n_snaps), dtype=np.complex128)
+        for i in range(n_snaps):
+            d_conj_i = np.conj(delta[i])
+            for j in range(n_snaps):
+                val = FdF
+                val -= delta[i] * FdMX[i]
+                val += d_conj_i * delta[j] * XMMX[i, j]
+                val -= np.conj(delta[j]) * MXdF[j]
+                A[i, j] = val
+
+        C = np.linalg.solve(A, b)
+        C_list[w, :] = C.flatten()
+
+    return C_list
 
 @njit(inline='always', cache=True)
 def _skip_ws(data, ptr, n):
@@ -10,7 +140,6 @@ def _skip_ws(data, ptr, n):
                        data[ptr] == 10 or data[ptr] == 13):
         ptr += 1
     return ptr
-
 
 @njit(inline='always', cache=True)
 def _parse_int(data, ptr, n):
@@ -33,7 +162,6 @@ def _parse_int(data, ptr, n):
         else:
             break
     return val * sign, ptr
-
 
 @njit(inline='always', cache=True)
 def _parse_float(data, ptr, n):
@@ -283,27 +411,33 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
     def concat_fam_files(directory):
         # get a list of all the .fam files in the directory
         if verbose: print(glob.glob(directory + '/*.famV0'))
-        for name in glob.glob(directory + '/*.famV0'):
+
+        if output_name != '':
+            dump_file = [str(output_dir.joinpath('fam_data.'+output_name+'.fam'))]
+        else:
+            dump_file = glob.glob(directory + '/*.famV0') # if multiple famV0
+
+        for file_path in dump_file:
+            name = file_path.split('\\')[-1].split('/')[-1]
             if verbose: print('Processing:', name)
             fam_files=[]
-            for f in glob.glob(name[:-1] + '*'):
-                version = f.split('V')[-1]
-                if version != '0':  # skip V0
-                    fam_files.append(f)
-            #if name+"V2" in glob.glob(directory + '/' + name +):
+            for f in glob.glob(directory+'\\'+name[:-1] + '*'):
+               #version = f.split('V')[-1]
+               #if version != '0':  # skip V0
+                fam_files.append(f)
             if len(fam_files) > 0:
-                fam_files.append(name)
+                fam_files.append(file_path) #master
                 if verbose: print(f'Merging', fam_files)
 
                 # open the first file to get the header (trailing '#' signs)
-                with open(fam_files[0], 'r') as f:
+                with open(fam_files[-1], 'r') as f:
                     lines = f.readlines()
                 header = [line for line in lines if line.strip().startswith('#')]
                 # join lines into string and remove last newline sign
                 header = ''.join(header)[:-1]
 
                 # check if the other headers are the same (as a simple consistency check)
-                for fam_file in fam_files[1:]:
+                for fam_file in fam_files[:-1]:
                     with open(fam_file, 'r') as f:
                         lines = f.readlines()
 
@@ -312,12 +446,13 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
 
                     if header_i != header:
                         raise Exception(f'Header in file {fam_file} differs from that in {fam_files[0]}')
+
                 # read the data in all fam files using pandas
                 df_list = [df for fam_file in fam_files if (df := read_fam_data(fam_file)) is not None]
                 # Filter out empty DataFrames
                 df_list = [df for df in df_list if not df.empty]
 
-                # concatinate all the dataframes, ignoring the arbitrary index
+                # concatenate all the dataframes, ignoring the arbitrary index
                 df_combined = pd.concat(df_list, ignore_index=True)
 
                 # sort on omega
@@ -328,29 +463,35 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
                 if output_name == '':
                     famfileout = output_dir.joinpath(name.split('\\')[-1].split('.famV')[0] + '.fam')
                 else:
-                    famfileout = output_dir.joinpath(output_name + '.fam')
+                    famfileout = output_dir.joinpath('fam_data.'+output_name + '.fam')
                 write_fam_data(df_cleaned, header, famfileout)
                 if verbose: print(f'Combined output written to "{famfileout}": ')
-
         return
 
     def concat_xy_files(directory):
         """
         concatenate .xy files from different runs together.
         """
-        for name in glob.glob(directory + '/*.xyV0'):
+        if output_name != '':
+            dump_file = [str(output_dir.joinpath('xy.'+output_name+'.xy'))]
+        else:
+            dump_file = glob.glob(directory + '/*.xyV0') # if multiple famV0
+
+        for file_path in dump_file:
+            name = file_path.split('\\')[-1].split('/')[-1]
             if verbose: print('Processing:', name)
             xy_files=[]
 
             all_header = None
             all_blocks = []
-            for f in glob.glob(name[:-1] + '*'):
-                version = f.split('V')[-1]
-                if version != '0':  # skip V0
-                    xy_files.append(f)
+            for f in glob.glob(directory + '\\' + name[:-1] + '*'):
+                # version = f.split('V')[-1]
+                # if version != '0':  # skip V0
+                xy_files.append(f)
+
             if len(xy_files) > 0:
-                xy_files.append(name)
-                if verbose: print(f'Merging',xy_files)
+                xy_files.append(file_path)
+                if verbose: print(f'Merging', xy_files)
 
             for i, file_path in enumerate(xy_files):
                 header, omega_blocks = XY_parse_file(file_path)
@@ -364,12 +505,19 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
                 all_blocks.extend(omega_blocks)
 
             all_blocks.sort(key=lambda x: x[0])
+            # don't allow for duplicate x[0]'s so the omegas
+            tmp = []
+            for block in all_blocks:
+                if block[0] in [tmp[k][0] for k in range(len(tmp))]:
+                    pass
+                else:
+                    tmp.append(block)
+            all_blocks = tmp
 
-            # out = name[:-5] + output_name + '.xy'
             if output_name == '':
                 out = output_dir.joinpath(file_path.split('\\')[-1].split('.xy')[0]+'.xy')
             else: 
-                out = output_dir.joinpath(output_name + '.xy')
+                out = output_dir.joinpath('xy.' + output_name + '.xy')
             with open(out, "w") as out:
                 out.writelines(all_header)
                 for omega, block_lines in all_blocks:
@@ -387,7 +535,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
     def XY_parse_file(path):
         import re
         omega_header_re = re.compile(r"&\s*omega\s*=\s*([0-9.\-Ee]+)")
-
+        # todo update regex to also include the smearing and save both omega and its smearing
         header = []
         omega_blocks = []
 
@@ -426,7 +574,6 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
             fmt = '%10.3f %10.3f %8i %25.12E %25.12E %25.12E %25.12E %25.12E %25.12E %25.12E'
             np.savetxt(filename, df.values, fmt=fmt, header=header, comments='')
         return
-
 
     concat_fam_files(directory)
     out_file = concat_xy_files(directory)
