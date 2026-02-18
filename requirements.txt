@@ -1,1 +1,4 @@
-# todo
+numba
+numpy
+scipy
+matplotlib
