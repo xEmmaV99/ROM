@@ -399,13 +399,17 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
 
     def XY_parse_file(path):
         import re
-        omega_header_re = re.compile(r"&\s*omega\s*=\s*([0-9.\-Ee]+)")
-        # todo update regex to also include the smearing and save both omega and its smearing
+        #omega_header_re = re.compile(r"&\s*omega\s*=\s*([0-9.\-Ee]+)")
+        omega_header_re = re.compile(r"&\s*omega\s*=\s*([0-9.\-Ee]+)\s+([0-9.\-Ee]+)")
+
         header = []
         omega_blocks = []
 
         with open(path, "r") as f:
             lines = f.readlines()
+
+
+
 
         current_block = []
         current_omega = None
@@ -414,11 +418,16 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
         for line in lines:
             m = omega_header_re.search(line)
             if m:  # Found a new & omega block
-                # store previous block
-                if current_omega is not None:
-                    omega_blocks.append((current_omega, current_block))
 
-                current_omega = float(m.group(1))
+                # Save them (e.g., as a tuple or dict)
+                if current_omega is not None:
+                    omega_blocks.append(current_omega, current_block)
+
+                # Extract both values
+                omega_val = float(m.group(1))
+                smearing_val = float(m.group(2))
+                current_omega = (omega_val, smearing_val)  # store new omega as a tuple
+                print(current_omega)
                 current_block = [line]  # start new block
                 in_omega_section = True
                 continue

@@ -6,6 +6,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import numpy as np
+from functools import cached_property
 from src.Utils_basis import cost_numba, _evaluate_PG_numba_coef
 from src.Utils_parsers import parse_XY_numba, combine_FAM_output
 
@@ -15,13 +16,26 @@ class ROM_basis:
         self.snapshots = None # todo consider merging omegas and  snapshots together
         self.F = None
 
+
     def is_loaded(self):
         return self.omegas is not None and self.snapshots is not None
 
+
     def load(self, path_to_snapshot):
-        from src.Utils import parse_XY_numba
+        from src.Utils_parsers import parse_XY_numba
         # load snapshots and omegas from file
         self.snapshots, self.omegas, self.F = parse_XY_numba(path_to_snapshot)
+
+    @cached_property
+    def strength(self):
+        print("Calculating strength...")
+        S_FAM = np.array([
+            np.sum(np.conj(self.F) * self.snapshots[:, 0, :][j] + np.conj(self.F) * self.snapshots[:, 1, :][j])
+            for j in range(len(self.omegas))
+        ], dtype=np.complex128)
+        # return -2 * np.imag(S_FAM) / np.pi
+        return 2*S_FAM # 2 is required to match the strength from direct FAM calculation
+
 
 class data:
     def __init__(self, file, fam_params=None):
@@ -99,6 +113,8 @@ class ROM_builder:
 
         BASE_DIR = Path(__file__).resolve().parent
         self.working_directory = BASE_DIR.joinpath('work_dir')
+        self.working_directory_linux = self.working_directory.as_posix().replace("C:/", "/mnt/c/") # for WSL
+
         print(f"Working directory set to: {self.working_directory}")
 
         # todo maybe check if wf file is actually valid
@@ -106,6 +122,12 @@ class ROM_builder:
         else: raise Exception("Tantalus installation not found. No FAM runs can be launched.")
 
         self.path_to_snapshot = None # to be set
+
+    def set_build_type(self, build_type):
+        supported = ['equidistant_1D', 'greedy', 'contour']
+        if build_type not in supported:
+            raise ValueError("Unknown build type. Supported types: " + ", ".join(supported))
+        self.build_type = build_type
 
     def _clear_working_directory(self):
         """
@@ -170,7 +192,7 @@ xyfile="../$logdir_name/xy.$protons.$neutrons.$nwn.$nwp.$l.$m.xy$OUT"
 exe="Tantalus.$pref.exe"              # full name of the mean-field executable
 exefam="fam.$pref.exe"                # full name of the fam executable
 param="$param"                         # name of the parameterization
-workdir="src/work_dir/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
+workdir="{self.working_directory_linux}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
 
 if [ ! -d "$workdir/" ]; then
   mkdir "$workdir"
@@ -180,6 +202,10 @@ cp $EXECDIR/$exe             "$workdir"/
 cp $EXECDIR/$exefam          "$workdir"/
 cp $PARAMDIR/"$param.param"  "$workdir"/
 cd "$workdir"
+
+if [ ! -d "../$logdir_name/" ]; then
+  mkdir "../$logdir_name"
+fi
 
 # Create runtime data
 cat << EOF > fam.data
@@ -269,6 +295,19 @@ fam_check=$?
 
             print("FAM launch completed.")
 
+            self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
+                                                       output_dir=self.working_directory.parent.parent.joinpath(
+                                                           "_output"))
+
+        elif self.build_type == 'contour':
+            ### start calculations to allow contour integration!
+            R = 500
+            n = 15
+            samples = [R * np.cos(arg) + 1j * R * np.sin(arg) for arg in np.linspace(0, np.pi/2, n)]
+            fam_runfiles = self._create_fam_runfiles(samples, output_folder=OUTPUT_NAME)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                executor.map(launch_fam, fam_runfiles.iterdir())
+            print("FAM launch completed.")
             self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
                                                        output_dir=self.working_directory.parent.parent.joinpath(
                                                            "_output"))
@@ -514,7 +553,7 @@ fam_check=$?
     #     pass
 
     def load(self, path_to_snapshot):
-        from src.Utils import parse_XY_numba
+        from src.Utils_parsers import parse_XY_numba
         # load snapshots and omegas from file
         self.basis.snapshots, self.basis.omegas, self.basis.F = parse_XY_numba(path_to_snapshot)
         self.path_to_snapshot = path_to_snapshot

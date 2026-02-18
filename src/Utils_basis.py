@@ -1,5 +1,6 @@
 import numpy as np
-from numba import njit
+from numba import njit, prange
+
 
 @njit(fastmath=True, cache=True)
 def cost_numba(omega, alpha, FdF, MXdF, XMMX, snapshot_omegas):
