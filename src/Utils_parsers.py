@@ -286,6 +286,8 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
             name = file_path.split('\\')[-1].split('/')[-1]
             if verbose: print('Processing:', name)
             fam_files=[]
+            print("DEBUG: name:", name)
+            print("DEBUG: glob.glob(directory+'\\'+name[:-1] + '*'):", glob.glob(directory+'\\'+name[:-1] + '*'))
             for f in glob.glob(directory+'\\'+name[:-1] + '*'):
                #version = f.split('V')[-1]
                #if version != '0':  # skip V0
