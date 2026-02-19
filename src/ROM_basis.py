@@ -386,6 +386,10 @@ fam_check=$?
                 Y = snapshots[:, 1, :]
 
                 diff_XY = X - Y
+                print("DE3BUG GREEDY CALC")
+                print("X shape: ", X.shape)
+                print("F shape: ", F.shape)
+
                 MXdF = diff_XY.conj() @ F
                 FdMX = MXdF.conj()
                 XMMX = X.conj() @ X.T + Y.conj() @ Y.T
