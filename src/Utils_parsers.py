@@ -408,9 +408,6 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
         with open(path, "r") as f:
             lines = f.readlines()
 
-
-
-
         current_block = []
         current_omega = None
         in_omega_section = False
@@ -418,10 +415,8 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
         for line in lines:
             m = omega_header_re.search(line)
             if m:  # Found a new & omega block
-
-                # Save them (e.g., as a tuple or dict)
                 if current_omega is not None:
-                    omega_blocks.append(current_omega, current_block)
+                    omega_blocks.append((current_omega, current_block))
 
                 # Extract both values
                 omega_val = float(m.group(1))

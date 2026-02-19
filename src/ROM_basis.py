@@ -28,7 +28,6 @@ class ROM_basis:
 
     @cached_property
     def strength(self):
-        print("Calculating strength...")
         S_FAM = np.array([
             np.sum(np.conj(self.F) * self.snapshots[:, 0, :][j] + np.conj(self.F) * self.snapshots[:, 1, :][j])
             for j in range(len(self.omegas))
@@ -45,6 +44,8 @@ class data:
         self.num_proton_wf = parse["num_proton_wf"]
         self.num_neutron_wf = parse["num_neutron_wf"]
         self.param = parse["param"]
+        self.dx = parse["dx"]
+        self.size = parse["size"]
 
         self.param_prefix = {"BSkG2": "BXL",
                              "BSkG5": "BXL-N2LO"}  # dict for parameterization prefixes @ tantalus specific
@@ -89,6 +90,8 @@ class data:
             "num_neutron_wf": grab(r"nwn\s*=\s*(\d+)", int),
             "num_proton_wf": grab(r"nwp\s*=\s*(\d+)", int),
             "param": grab(r"Parameterization name\s+(\S+)", str),
+            "dx": grab(r'dx\s*=\s*([0-9.eE+-]+)',float),
+            "size": grab(r'nx\s*=\s*([0-9]+)', float)*grab(r'dx\s*=\s*([0-9.eE+-]+)',float),
         }
 
     @property
@@ -100,6 +103,7 @@ class ROM_builder:
                  path_to_meanfield_wf,
                  path_to_meanfield_out,
                  FAM):
+        self.merge_FAM_output = True # if False, the output files are not merged and the working dir is not cleared.
 
         self.data = data(path_to_meanfield_out)
         self.data.set_FAM_parameters(FAM)
@@ -115,11 +119,9 @@ class ROM_builder:
         self.working_directory = BASE_DIR.joinpath('work_dir')
         self.working_directory_linux = self.working_directory.as_posix().replace("C:/", "/mnt/c/") # for WSL
 
-        print(f"Working directory set to: {self.working_directory}")
-
         # todo maybe check if wf file is actually valid
-        if self._check_tantalus_installation(): print("Tantalus installation found.")
-        else: raise Exception("Tantalus installation not found. No FAM runs can be launched.")
+        if not self._check_tantalus_installation():
+            raise Exception("Tantalus installation not found. No FAM runs can be launched.")
 
         self.path_to_snapshot = None # to be set
 
@@ -128,6 +130,11 @@ class ROM_builder:
         if build_type not in supported:
             raise ValueError("Unknown build type. Supported types: " + ", ".join(supported))
         self.build_type = build_type
+
+    def set_contour_parameters(self, n, R, r):
+        self.contour_n = n
+        self.contour_R = R
+        self.contour_r = r
 
     def _clear_working_directory(self):
         """
@@ -141,8 +148,8 @@ class ROM_builder:
                     item.rmdir()
                 else:
                     item.unlink()
-        else:
-            self.working_directory.mkdir(parents=True, exist_ok=True)
+        # make sure the working directory exists
+        self.working_directory.mkdir(parents=True, exist_ok=True)
 
     def _check_snapshot_file(self):
         return self.path_to_snapshot.exists()
@@ -152,7 +159,13 @@ class ROM_builder:
         Create a FAM runfile for the given omegas
         """
         d = self.data
-        run_folder = self.working_directory.joinpath('tmp')
+        # always create a new folder, add number if already exists
+        # check if file exists
+        run_folder = self.working_directory.joinpath('runfiles')
+        while run_folder.exists():
+            count = 1
+            run_folder = self.working_directory.joinpath(f'runfiles_{count}')
+
         run_folder.mkdir(parents=True, exist_ok=True)
         for iteration, omega in enumerate(omegas):
             Rew = omega.real
@@ -164,8 +177,8 @@ class ROM_builder:
 #!/usr/bin/env bash
 neutrons={d.num_neutron}
 protons={d.num_proton}
-dx=0.8
-size=16
+dx={d.dx}
+size={round(d.size)}
 l={d.l}
 m={d.m}
 param="{d.param}"
@@ -185,9 +198,9 @@ PARAMDIR="{self.TANTALUS_PATH}parameterizations"
 #1. environment variables
 # clean up old log and data files. Logfile relative to workdir
 wffile="{self.path_to_meanfield_wf}"
-famoutfile="../$logdir_name/fam.$protons.$neutrons.$nwn.$nwp.$l.$m.out$OUT"
-famfile="../$logdir_name/fam_data.$protons.$neutrons.$nwn.$nwp.$l.$m.fam$OUT"
-xyfile="../$logdir_name/xy.$protons.$neutrons.$nwn.$nwp.$l.$m.xy$OUT"
+famoutfile="../$logdir_name/fam.$protons.$neutrons.$nwn.$nwp.$l.$m.$param.$size.out$OUT"
+famfile="../$logdir_name/fam_data.$protons.$neutrons.$nwn.$nwp.$l.$m.$param.$size.fam$OUT"
+xyfile="../$logdir_name/xy.$protons.$neutrons.$nwn.$nwp.$l.$m.$param.$size.xy$OUT"
 
 exe="Tantalus.$pref.exe"              # full name of the mean-field executable
 exefam="fam.$pref.exe"                # full name of the fam executable
@@ -275,9 +288,7 @@ fam_check=$?
             self.build_type = build_type
 
         d = self.data
-        self._clear_working_directory()
         OUTPUT_NAME = "TMP_SNAPSHOTS"
-
 
         if self.build_type == 'equidistant_1D':
             # static basis creation
@@ -301,16 +312,23 @@ fam_check=$?
 
         elif self.build_type == 'contour':
             ### start calculations to allow contour integration!
-            R = 500
-            n = 15
-            samples = [R * np.cos(arg) + 1j * R * np.sin(arg) for arg in np.linspace(0, np.pi/2, n)]
+            if self.basis.is_loaded():
+                print("Basis already loaded. Adding samples")
+                out_name = str(self.path_to_snapshot).split('xy')[-2][1:-1]
+            else:
+                out_name = ''
+            # check if contour parameters are set
+            if not hasattr(self, 'contour_n') or not hasattr(self, 'contour_R') or not hasattr(self, 'contour_r'):
+                raise ValueError("Contour parameters not set. Please set contour parameters before building contour basis.")
+            samples = [self.contour_R * np.cos(arg) + 1j * self.contour_R * np.sin(arg) for arg in np.linspace(0, np.pi/2, self.contour_n)]
+
             fam_runfiles = self._create_fam_runfiles(samples, output_folder=OUTPUT_NAME)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 executor.map(launch_fam, fam_runfiles.iterdir())
             print("FAM launch completed.")
             self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
                                                        output_dir=self.working_directory.parent.parent.joinpath(
-                                                           "_output"))
+                                                           "_output"), output_name=out_name)
 
         elif self.build_type == 'greedy':
             # iterative basis creation
@@ -341,19 +359,17 @@ fam_check=$?
 
             ### greedy loop
             FdF = F.conj().T @ F
-            for k in range(initial_vectors, d.num_snapshots): #todo consider adding value threshold instead fo num snap, or both
+            for k in range(initial_vectors, d.num_snapshots):
+                #todo consider adding value threshold instead fo num snap, or both
                 COSTS = np.zeros(len(W_scan))
 
                 X = snapshots[:, 0, :]
                 Y = snapshots[:, 1, :]
 
-                print(X.shape, Y.shape)
                 diff_XY = X - Y
                 MXdF = diff_XY.conj() @ F
                 FdMX = MXdF.conj()
                 XMMX = X.conj() @ X.T + Y.conj() @ Y.T
-
-                # if projection_method=="PG":
 
                 alphas = _evaluate_PG_numba_coef(W_scan, snapshot_omegas, FdF, FdMX, MXdF, XMMX)
 
@@ -396,8 +412,11 @@ fam_check=$?
             raise ValueError("Unknown build type.")
 
         # clean up and load basis
-        self._clear_working_directory()
-        self.basis.load(self.path_to_snapshot)
+        if not self.merge_FAM_output:
+            print("Merging of FAM output is disabled.")
+        else:
+            self._clear_working_directory()
+            self.basis.load(self.path_to_snapshot)
         print("Basis loaded.")
         return
 
@@ -554,6 +573,9 @@ fam_check=$?
 
     def load(self, path_to_snapshot):
         from src.Utils_parsers import parse_XY_numba
-        # load snapshots and omegas from file
-        self.basis.snapshots, self.basis.omegas, self.basis.F = parse_XY_numba(path_to_snapshot)
-        self.path_to_snapshot = path_to_snapshot
+        try:
+            # load snapshots and omegas from file
+            self.basis.snapshots, self.basis.omegas, self.basis.F = parse_XY_numba(path_to_snapshot)
+            self.path_to_snapshot = path_to_snapshot
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Could not find snapshot {path_to_snapshot}.")
