@@ -330,7 +330,7 @@ fam_check=$?
 
             self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
                                                        output_dir=self.working_directory.parent.parent.joinpath(
-                                                           "_output"))
+                                                           "_outputs"))
 
         elif self.build_type == 'contour':
             ### start calculations to allow contour integration!
@@ -350,7 +350,7 @@ fam_check=$?
             print("FAM launch completed.")
             self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
                                                        output_dir=self.working_directory.parent.parent.joinpath(
-                                                           "_output"), output_name=out_name)
+                                                           "_outputs"), output_name=out_name)
 
         elif self.build_type == 'greedy':
             # iterative basis creation
@@ -371,7 +371,7 @@ fam_check=$?
 
                 print("Initial FAM launch completed.")
                 self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-                                                      output_dir=self.working_directory.parent.parent.joinpath("_output"),
+                                                      output_dir=self.working_directory.parent.parent.joinpath("_outputs"),
                                                       output_name='')
             else:
                 initial_vectors = len(self.basis.omegas)
@@ -425,7 +425,7 @@ fam_check=$?
                     out_name = ''
 
                 self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-                                                       output_dir=self.working_directory.parent.parent.joinpath("_output"),
+                                                       output_dir=self.working_directory.parent.parent.joinpath("_outputs"),
                                                         output_name=out_name)
 
                 snapshots, snapshot_omegas, _ = parse_XY_numba(self.path_to_snapshot) # update
@@ -485,7 +485,7 @@ fam_check=$?
     #     # from the folder OUTPUT_NAME read all files, merge them into one, and delete the old ones
     #     if RUN_FAM:
     #         self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-    #                            output_dir=self.working_directory.parent.parent.joinpath("_output"))
+    #                            output_dir=self.working_directory.parent.parent.joinpath("_outputs"))
     #
     #         self._clear_working_directory()
     #
@@ -525,7 +525,7 @@ fam_check=$?
     #
     #         print("Initial FAM launch completed.")
     #         self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-    #                                               output_dir=self.working_directory.parent.parent.joinpath("_output"),
+    #                                               output_dir=self.working_directory.parent.parent.joinpath("_outputs"),
     #                                               output_name='')
     #     else:
     #         initial_vectors = len(self.basis.omegas)
@@ -582,7 +582,7 @@ fam_check=$?
     #             out_name = ''
     #
     #         self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(OUTPUT_NAME)}",
-    #                                                output_dir=self.working_directory.parent.parent.joinpath("_output"),
+    #                                                output_dir=self.working_directory.parent.parent.joinpath("_outputs"),
     #                                                 output_name=out_name)
     #
     #         snapshots, snapshot_omegas, _ = parse_XY_numba(self.path_to_snapshot) # update
