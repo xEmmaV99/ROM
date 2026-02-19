@@ -298,10 +298,14 @@ fam_check=$?
 
     def build_snapshot_basis(self, max_workers=4, build_type=None):
         def launch_fam(fam_runfile):
-            # Convert Windows path to WSL path
-            wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
-            print(f"Launching FAM with runfile: {fam_runfile}")
-            subprocess.run(["bash", wsl_path], check=True)
+            if platform.system() == "Windows":
+                # Convert Windows path to WSL path
+                wsl_path = f"/mnt/{fam_runfile.drive[0].lower()}{fam_runfile.as_posix()[2:]}"
+                print(f"Launching FAM with runfile: {fam_runfile}")
+                subprocess.run(["bash", wsl_path], check=True)
+            else:
+                subprocess.run(["bash", str(fam_runfile)], check=True)
+
         if build_type is not None:
             self.build_type = build_type
 
