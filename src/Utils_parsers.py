@@ -283,7 +283,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
             dump_file = glob.glob(directory + '/*.famV0') # if multiple famV0
         print("DEBUG: dump_file:", dump_file)
         for file_path in dump_file:
-            name = file_path.split('\\')[-1].split('/')[-1]
+            name = file_path.split('\\')[-1].split('/')[-1].strip("V0")
             if verbose: print('Processing:', name)
             fam_files=[]
             print("DEBUG: name:", name)
