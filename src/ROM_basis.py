@@ -9,6 +9,8 @@ import numpy as np
 from functools import cached_property
 from src.Utils_basis import cost_numba, _evaluate_PG_numba_coef
 from src.Utils_parsers import parse_XY_numba, combine_FAM_output
+import platform
+
 
 class ROM_basis:
     def __init__(self):
@@ -283,15 +285,16 @@ fam_check=$?
         return run_folder
 
     def _check_tantalus_installation(self):
-        linux_path = self.TANTALUS_PATH
-        try:
-            subprocess.run(["wsl", "bash", "-c", f"test -d {linux_path}"], check=True)
-            #print(f"Found Tantalus in WSL at {linux_path}")
-            return True
-        except subprocess.CalledProcessError:
-            #print("Tantalus not found in WSL.")
-            return False
-
+        if platform.system() == "Windows":
+            # Use WSL to check the Linux path
+            try:
+                subprocess.run(["wsl", "bash", "-c", f"test -d {self.TANTALUS_PATH}"], check=True)
+                return True
+            except subprocess.CalledProcessError:
+                return False
+        else:
+            # Linux just check the path directly
+            return Path(self.TANTALUS_PATH).is_dir()
 
     def build_snapshot_basis(self, max_workers=4, build_type=None):
         def launch_fam(fam_runfile):
