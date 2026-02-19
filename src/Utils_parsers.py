@@ -281,18 +281,14 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
             dump_file = [str(output_dir.joinpath('fam_data.'+output_name+'.fam'))]
         else:
             dump_file = glob.glob(directory + '/*.famV0') # if multiple famV0
-        print("DEBUG: dump_file:", dump_file)
         for file_path in dump_file:
-            name = file_path.split('\\')[-1].split('/')[-1].strip("V0")
+            name = file_path.split('\\')[-1].split('/')[-1]
             if verbose: print('Processing:', name)
             fam_files=[]
-            print("DEBUG: name:", name)
-            print("DEBUG: glob.glob(directory+'\\'+name[:-1] + '*'):", glob.glob(directory+'\\'+name[:-1] + '*'))
-            for f in glob.glob(directory+'\\'+name[:-1] + '*'):
+            for f in list(Path(directory).glob(f"{name[:-1]}*")):
                #version = f.split('V')[-1]
                #if version != '0':  # skip V0
                 fam_files.append(f)
-            print("DEBUG: fam_files:", fam_files)
             if len(fam_files) > 0:
                 fam_files.append(file_path) #master
                 if verbose: print(f'Merging', fam_files)
@@ -352,7 +348,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
 
             all_header = None
             all_blocks = []
-            for f in glob.glob(directory + '\\' + name[:-1] + '*'):
+            for f in list(Path(directory).glob(name[:-1] + '*')):
                 # version = f.split('V')[-1]
                 # if version != '0':  # skip V0
                 xy_files.append(f)
