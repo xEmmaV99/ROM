@@ -340,12 +340,13 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
             dump_file = [str(output_dir.joinpath('xy.'+output_name+'.xy'))]
         else:
             dump_file = glob.glob(directory + '/*.xyV0') # if multiple famV0
-
+        print("DEBUG dump_file", dump_file)
         for file_path in dump_file:
             name = file_path.split('\\')[-1].split('/')[-1]
             if verbose: print('Processing:', name)
             xy_files=[]
 
+            print("DEBUG glob", list(Path(directory).glob(name[:-1] + '*')))
             all_header = None
             all_blocks = []
             for f in list(Path(directory).glob(name[:-1] + '*')):
@@ -382,6 +383,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
                 out = output_dir.joinpath(file_path.split('\\')[-1].split('.xy')[0]+'.xy')
             else:
                 out = output_dir.joinpath('xy.' + output_name + '.xy')
+            print("DEBUG out", out)
             with open(out, "w") as out:
                 out.writelines(all_header)
                 for omega, block_lines in all_blocks:
@@ -449,5 +451,5 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
 
     concat_fam_files(directory)
     out_file = concat_xy_files(directory)
-
+    print(out_file)
     return Path(out_file)
