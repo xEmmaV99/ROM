@@ -173,15 +173,12 @@ class ROM_builder:
         # always create a new folder, add number if already exists
         # check if file exists
         run_folder = self.working_directory.joinpath('runfiles')
-        while run_folder.exists():
-            count = 1
-            run_folder = self.working_directory.joinpath(f'runfiles_{count}')
 
         run_folder.mkdir(parents=True, exist_ok=True)
         for iteration, omega in enumerate(omegas):
             Rew = omega.real
             Imw = omega.imag
-            file = run_folder.joinpath(f"fam_run{Rew}+{Imw}j.sh")
+            file = run_folder.joinpath(f"fam_run.{d.num_neutron}.{d.num_proton}.{d.num_neutron_wf}.{d.num_proton}.{d.param}.{d.size}.{Rew}+{Imw}j.sh")
             file.parent.mkdir(parents=True, exist_ok=True)
 
             script = f"""\
