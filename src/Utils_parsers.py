@@ -281,7 +281,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
             dump_file = [str(output_dir.joinpath('fam_data.'+output_name+'.fam'))]
         else:
             dump_file = glob.glob(directory + '/*.famV0') # if multiple famV0
-
+        print("DEBUG: dump_file:", dump_file)
         for file_path in dump_file:
             name = file_path.split('\\')[-1].split('/')[-1]
             if verbose: print('Processing:', name)
@@ -290,7 +290,7 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
                #version = f.split('V')[-1]
                #if version != '0':  # skip V0
                 fam_files.append(f)
-
+            print("DEBUG: fam_files:", fam_files)
             if len(fam_files) > 0:
                 fam_files.append(file_path) #master
                 if verbose: print(f'Merging', fam_files)
