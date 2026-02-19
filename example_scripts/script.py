@@ -20,7 +20,7 @@ rom_builder = ROM_builder(path_to_meanfield_wf=WAVE_FUNCTION,
 rom_builder.build_type = 'greedy'
 
 # LOAD if it already exists
-path_to_snapshot = 'C:/users/emmav/PycharmProjects/ROM/_output/xy.12.12.30.30.2.0.xy'
+path_to_snapshot = 'C:/users/emmav/PycharmProjects/ROM/_outputs/xy.12.12.30.30.2.0.xy'
 rom_builder.basis.load(path_to_snapshot)
 
 #rom_builder.build_snapshot_basis_static(max_workers=8)

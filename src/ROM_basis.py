@@ -102,7 +102,8 @@ class ROM_builder:
     def __init__(self,
                  path_to_meanfield_wf,
                  path_to_meanfield_out,
-                 FAM):
+                 FAM,
+                 tantalus_path="~/code/tantalus/"):
         self.merge_FAM_output = True # if False, the output files are not merged and the working dir is not cleared.
 
         self.data = data(path_to_meanfield_out)
@@ -119,11 +120,19 @@ class ROM_builder:
         self.working_directory = BASE_DIR.joinpath('work_dir')
         self.working_directory_linux = self.working_directory.as_posix().replace("C:/", "/mnt/c/") # for WSL
 
-        # todo maybe check if wf file is actually valid
+        # check if Tantalus is installed, if not raise error
+        self.set_TANTALUS_path(tantalus_path)
         if not self._check_tantalus_installation():
             raise Exception("Tantalus installation not found. No FAM runs can be launched.")
 
+        # todo check if wf input file is valid
+
         self.path_to_snapshot = None # to be set
+
+
+
+    def set_TANTALUS_path(self, path):
+        self.TANTALUS_PATH = path
 
     def set_build_type(self, build_type):
         supported = ['equidistant_1D', 'greedy', 'contour']
@@ -131,7 +140,7 @@ class ROM_builder:
             raise ValueError("Unknown build type. Supported types: " + ", ".join(supported))
         self.build_type = build_type
 
-    def set_contour_parameters(self, n, R, r):
+    def set_contour_parameters(self, n=13, R=500, r=0.1):
         self.contour_n = n
         self.contour_R = R
         self.contour_r = r
@@ -274,9 +283,15 @@ fam_check=$?
         return run_folder
 
     def _check_tantalus_installation(self):
-        # check if tantalus is installed
-        self.TANTALUS_PATH = "$HOME/code/tantalus/"
-        return True #todo check properly
+        linux_path = self.TANTALUS_PATH
+        try:
+            subprocess.run(["wsl", "bash", "-c", f"test -d {linux_path}"], check=True)
+            #print(f"Found Tantalus in WSL at {linux_path}")
+            return True
+        except subprocess.CalledProcessError:
+            #print("Tantalus not found in WSL.")
+            return False
+
 
     def build_snapshot_basis(self, max_workers=4, build_type=None):
         def launch_fam(fam_runfile):

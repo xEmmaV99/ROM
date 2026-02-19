@@ -6,8 +6,8 @@ This repository can be used to create an emulator for QRPA linear response. The 
  The repository is structured as follows:
 ```text
 ROM/
-├── _input/
-├── _output/
+├── _inputs/
+├── _outputs/
 ├── example_scripts/
 │   ├── create_snapshots.py
 │   └── load_snapshots.py
@@ -36,4 +36,10 @@ In case the ```build_type == 'greedy'```, one can load previous runs using ```ro
 In order to set up the emulator, one has to load a basis with ```basis = ROM_basis()```,  ```basis.load(path)``` and then calling ``` emulator = Emulator(basis)```. The projection method is specified using the ```emulator.projection_method``` field. 
 
 To apply the emulator to target values, simply use ```emulator.evaluate(target_values)```.
+
+
+
+# Extra notes also for myself
+Running on linux/remote: make sure to load the venv using ```source /path/to/venv/bin/activate```
+Then run a script using ```python -m example_scripts.script``` to make sure that the source code is loaded
 

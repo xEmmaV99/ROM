@@ -290,11 +290,12 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
                #version = f.split('V')[-1]
                #if version != '0':  # skip V0
                 fam_files.append(f)
+
             if len(fam_files) > 0:
                 fam_files.append(file_path) #master
                 if verbose: print(f'Merging', fam_files)
 
-                # open the first file to get the header (trailing '#' signs)
+                # open the last file to get the header (trailing '#' signs)
                 with open(fam_files[-1], 'r') as f:
                     lines = f.readlines()
                 header = [line for line in lines if line.strip().startswith('#')]
@@ -439,10 +440,14 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
         return header, omega_blocks
 
     def write_fam_data(df, header, filename):
-        with open(filename, 'ab') as f:
-            fmt = '%10.3f %10.3f %8i %25.12E %25.12E %25.12E %25.12E %25.12E %25.12E %25.12E'
-            np.savetxt(filename, df.values, fmt=fmt, header=header, comments='')
-        return
+        fmt = '%10.3f %10.3f %8i %25.12E %25.12E %25.12E %25.12E %25.12E %25.12E %25.12E'
+        with open(filename, 'w') as f:
+            np.savetxt(f, df.values, fmt=fmt, header=header, comments='')
+
+
+    if output_name != '':
+        #todo, check if output file already exists and if not, then create empty file
+        pass
 
     concat_fam_files(directory)
     out_file = concat_xy_files(directory)
