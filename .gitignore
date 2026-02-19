@@ -1,3 +1,6 @@
-_inputs/
-_outputs/
+_inputs/*
+_outputs/*
 venv/
+
+!_inputs/.gitkeep
+!_outputs/.gitkeep
