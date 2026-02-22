@@ -26,6 +26,7 @@ class ROM_basis:
         from src.Utils_parsers import parse_XY_numba
         # load snapshots and omegas from file
         self.snapshots, self.omegas, self.F = parse_XY_numba(path_to_snapshot)
+        return self
 
     @cached_property
     def strength(self):
@@ -104,7 +105,7 @@ class ROM_builder:
                  path_to_meanfield_wf,
                  path_to_meanfield_out,
                  FAM,
-                 tantalus_path="~/code/tantalus/"):
+                 tantalus_path="$HOME/code/tantalus/"):
         self._DEBUG_clear_wd = True # if False, the output files are not merged and the working dir is not cleared. Only used for debugging purposes
 
         self.data = data(path_to_meanfield_out)
@@ -123,14 +124,17 @@ class ROM_builder:
 
         # check if Tantalus is installed, if not raise error
         self.set_TANTALUS_path(tantalus_path)
-        # if not self._check_tantalus_installation():
-        #     raise Exception("Tantalus installation not found. No FAM runs can be launched.")
+
+        print(f"Checking Tantalus installation at: {self.TANTALUS_PATH}")
+        if not self._check_tantalus_installation():
+             raise Exception("Tantalus installation not found. No FAM runs can be launched.")
 
         # todo check if wf input file is valid
 
         self.path_to_snapshot = None # to be set
         self.run_type = 'default' # run all by default
-        self.output_name = "TMP_SNAPSHOTS"
+        self.tmp_output = "TMP_SNAPSHOTS"
+        self.output_dir = self.working_directory.parent.parent.joinpath("_outputs")
 
 
     def set_TANTALUS_path(self, path):
@@ -292,20 +296,20 @@ fam_check=$?
         return run_folder
 
 
-    def _check_tantalus_installation(self):
-        return Path(self.TANTALUS_PATH).expanduser().is_dir()
-
     # def _check_tantalus_installation(self):
-    #     if platform.system() == "Windows":
-    #         # Use WSL to check the Linux path
-    #         try:
-    #             subprocess.run(["wsl", "bash", "-c", f"test -d {self.TANTALUS_PATH}"], check=True)
-    #             return True
-    #         except subprocess.CalledProcessError:
-    #             return False
-    #     else:
-    #         # Linux just check the path directly
-    #         return Path(self.TANTALUS_PATH).is_dir()
+    #     return Path(self.TANTALUS_PATH).expanduser().is_dir()
+
+    def _check_tantalus_installation(self):
+        if platform.system() == "Windows":
+            # Use WSL to check the Linux path
+            try:
+                subprocess.run(["wsl", "bash", "-c", f"test -d {self.TANTALUS_PATH}"], check=True)
+                return True
+            except subprocess.CalledProcessError:
+                return False
+        else:
+            # Linux just check the path directly
+            return Path(self.TANTALUS_PATH).is_dir()
 
     def build_snapshot_basis(self, max_workers=4, build_type=None, run_type=None):
         def launch_fam(fam_runfile):
@@ -329,19 +333,18 @@ fam_check=$?
             omegas = np.linspace(d.w_min, d.w_max, num=d.num_snapshots) + d.smear * 1.j
             if self.basis.is_loaded():
                 raise AssertionError("Basis already loaded. Cannot initiate equidistant sampling.")
-            fam_runfiles = self._create_fam_runfiles(omegas, output_folder=self.output_name)
+            fam_runfiles = self._create_fam_runfiles(omegas, output_folder=self.tmp_output)
 
             if self.run_type == 'default':
-                base_dir = Path(f"src/work_dir/{self.output_name}")
+                base_dir = Path(f"src/work_dir/{self.tmp_output}")
                 base_dir.mkdir(parents=True, exist_ok=True)
 
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     executor.map(launch_fam, fam_runfiles.iterdir())
 
                 print("FAM launch completed, merging ...")
-                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.output_name)}",
-                                                           output_dir=self.working_directory.parent.parent.joinpath(
-                                                               "_outputs"))
+                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
+                                                           output_dir=self.output_dir)
 
         elif self.build_type == 'contour':
             ### start calculations to allow contour integration!
@@ -355,14 +358,13 @@ fam_check=$?
                 raise ValueError("Contour parameters not set. Please set contour parameters before building contour basis.")
             samples = [self.contour_R * np.cos(arg) + 1j * self.contour_R * np.sin(arg) for arg in np.linspace(0, np.pi/2, self.contour_n)]
 
-            fam_runfiles = self._create_fam_runfiles(samples, output_folder=self.output_name)
+            fam_runfiles = self._create_fam_runfiles(samples, output_folder=self.tmp_output)
             if self.run_type == 'default':
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     executor.map(launch_fam, fam_runfiles.iterdir())
                 print("FAM launch completed, merging ...")
-                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.output_name)}",
-                                                           output_dir=self.working_directory.parent.parent.joinpath(
-                                                               "_outputs"), output_name=out_name)
+                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
+                                                           output_dir=self.output_dir, output_name=out_name)
 
         elif self.build_type == 'greedy':
             # iterative basis creation
@@ -374,16 +376,16 @@ fam_check=$?
                 w2 = 0.75*(d.w_max - d.w_min) + d.smear * 1.j
 
                 # initiate two FAM runs
-                fam_runfiles = self._create_fam_runfiles([w1,w2], output_folder=self.output_name)
-                base_dir = Path(f"src/work_dir/{self.output_name}")
+                fam_runfiles = self._create_fam_runfiles([w1,w2], output_folder=self.tmp_output)
+                base_dir = Path(f"src/work_dir/{self.tmp_output}")
                 base_dir.mkdir(parents=True, exist_ok=True)
 
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     executor.map(launch_fam, fam_runfiles.iterdir())
 
                 print("Initial FAM launch completed.")
-                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.output_name)}",
-                                                      output_dir=self.working_directory.parent.parent.joinpath("_outputs"),
+                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
+                                                      output_dir=self.output_dir,
                                                       output_name='')
             else:
                 initial_vectors = len(self.basis.omegas)
@@ -427,8 +429,8 @@ fam_check=$?
 
                 print('Initiating new FAM run for new snapshot: ', W_scan[max_cost_idx])
                 # launch new FAM run for new snapshot
-                fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]], output_folder=self.output_name, global_iteration=k+1)
-                base_dir = Path(f"src/work_dir/{self.output_name}")
+                fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]], output_folder=self.tmp_output, global_iteration=k+1)
+                base_dir = Path(f"src/work_dir/{self.tmp_output}")
                 base_dir.mkdir(parents=True, exist_ok=True)
 
                 launch_fam(fam_runfile)
@@ -440,13 +442,13 @@ fam_check=$?
                 else:
                     out_name = ''
 
-                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.output_name)}",
-                                                       output_dir=self.working_directory.parent.parent.joinpath("_outputs"),
+                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
+                                                       output_dir=self.output_dir,
                                                         output_name=out_name)
 
                 snapshots, snapshot_omegas, _ = parse_XY_numba(self.path_to_snapshot) # update
 
-        else: raise ValueError("Unknown build type: " + self.build_type)
+        else: raise ValueError("Unknown build type: " + self.build_type+". Supported types: equidistant_1D, greedy, contour")
 
         # clean up and load basis
         if not self._DEBUG_clear_wd:
