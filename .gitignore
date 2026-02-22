@@ -1,6 +1,4 @@
 _inputs/*
 _outputs/*
+_scripts/*
 venv/
-
-!_inputs/.gitkeep
-!_outputs/.gitkeep
