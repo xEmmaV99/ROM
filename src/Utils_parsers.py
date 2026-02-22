@@ -268,6 +268,20 @@ def parse_XY_numba(filename, return_idx=False):
     return RESULT, omegas, F_data
 
 
+def merge_FAM_outputs(folder, master_file=None):
+    if master_file is None:
+        out_name=''
+    else:
+        out_name = str(master_file).split('xy')[-2][1:-1]
+
+    path_to_snapshot = combine_FAM_output(
+            directory=folder,
+            output_dir=Path('../_outputs'),
+            output_name=out_name
+        )
+    print("Merge completed. Snapshot file created at: ", path_to_snapshot)
+
+
 def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False):
     import glob
     import numpy as np
