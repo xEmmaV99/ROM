@@ -1,3 +1,7 @@
+"""
+TODO: fix this script !
+"""
+
 from src.ROM_basis import ROM_builder, ROM_basis
 from src.Emulator import Emulator
 import numpy as np
@@ -7,7 +11,7 @@ WAVE_FUNCTION = '/mnt/c/users/emmav/PycharmProjects/ROM/_input/wf.12.12.30.30'
 MF_OUT = '/mnt/c/users/emmav/PycharmProjects/ROM/_input/mf.12.12.30.30.out'
 FAM_INPUT = {'w_min': 5.0,
              'w_max': 40.0,
-             'num_snapshots' : 20,
+             'num_snapshots' : 12,
              'smear': 1.0,
              'l': 2 , # multipolarity
              'm': 0,  # magnetic quantum number
@@ -18,6 +22,7 @@ rom_builder = ROM_builder(path_to_meanfield_wf=WAVE_FUNCTION,
                           FAM=FAM_INPUT)
 
 rom_builder.build_type = 'greedy'
+rom_builder.data.num_snapshots = 14 #override
 
 # LOAD if it already exists
 path_to_snapshot = 'C:/users/emmav/PycharmProjects/ROM/_outputs/xy.12.12.30.30.2.0.xy'
