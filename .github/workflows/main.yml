@@ -1,0 +1,44 @@
+name: Run Unit Test via Pytest
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov ruff
+
+      - name: Lint with Ruff
+        run: |
+          ruff check . --output-format=github
+        continue-on-error: true
+
+      # OPTION A — run everything
+      # - name: Run tests
+      #   run: |
+      #     pytest -v --cov=. --cov-report=term-missing
+
+      # OPTION B — run only a specific test (uncomment if needed)
+      - name: Run targeted test
+        run: |
+          pytest tests/test_predictions.py::TestPredictions -v --cov=. --cov-report=term-missing
