@@ -36,4 +36,4 @@ jobs:
       # OPTION B — run only a specific test (uncomment if needed)
       - name: Run targeted test
         run: |
-          pytest tests/test.py::TestPredictions -v --cov=. --cov-report=term-missing
+          python -m pytest tests/test.py::TestPredictions -v --cov=. --cov-report=term-missing
