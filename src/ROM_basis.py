@@ -429,7 +429,7 @@ fam_check=$?
 
                 print('Initiating new FAM run for new snapshot: ', W_scan[max_cost_idx])
                 # launch new FAM run for new snapshot
-                fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]], output_folder=self.tmp_output, global_iteration=k+1)
+                fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]], output_folder=self.tmp_output, global_iteration=k)
                 base_dir = Path(f"src/work_dir/{self.tmp_output}")
                 base_dir.mkdir(parents=True, exist_ok=True)
 
