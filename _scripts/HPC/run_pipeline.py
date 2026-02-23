@@ -8,8 +8,10 @@ if __name__ == "__main__":
     smear=float(sys.argv[2])
     num_snaps=int(sys.argv[1])
 
-    WAVE_FUNCTION = f'/mnt/c/users/emmav/PycharmProjects/ROM/_inputs/wf.12.12.100.100.{param}.8'
-    MF_OUT = f'/mnt/c/users/emmav/PycharmProjects/ROM/_inputs/mf.12.12.100.100.{param}.8.out'
+#    WAVE_FUNCTION = f'/mnt/c/users/emmav/PycharmProjects/ROM/_inputs/wf.12.12.150.150.{param}.8'
+#    MF_OUT = f'/mnt/c/users/emmav/PycharmProjects/ROM/_inputs/mf.12.12.150.150.{param}.8.out'
+    WAVE_FUNCTION = f'/home/vancayseele/_inputs/wf.12.12.150.150.{param}.8'
+    MF_OUT = f'/home/vancayseele/ROM/_inputs/mf.12.12.150.150.{param}.8.out'
 
     FAM_INPUT = {'w_min': 0.0,
                  'w_max': 50.0,
@@ -22,7 +24,7 @@ if __name__ == "__main__":
     builder = ROM_builder(path_to_meanfield_wf=WAVE_FUNCTION,
                           path_to_meanfield_out=MF_OUT,
                           FAM=FAM_INPUT,
-                          tantalus_path='~/code/tantalus/'
+                          tantalus_path='/home/vancayseele/code/tantalus/' #'~/code/tantalus/'
                           )
 
     builder.set_run_type("generate_runfiles")
