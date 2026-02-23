@@ -2,16 +2,17 @@
 #SBATCH --job-name=FAM_ROM_Build
 #SBATCH --output=rom_build_%j.out
 #SBATCH --nodes=1
-#SBATCH --ntasks=5           # Amount of jobs to run in parallel
+#SBATCH --ntasks=300           # Amount of jobs to run in parallel
 #SBATCH --cpus-per-task=1
 #SBATCH --time=04:00:00       # Max time limit
 # If you run into memory issues, specify it using --mem-per-cpu (e.g. --mem-per-cpu=4G)
 
-SMEAR=1.0
-PARAM="BSkG2"
+SMEAR=1.0 # 0.1 0.25 0.5 0.75 1.0 1.5
+PARAM="BSkG2" # "BSkG2" "BSkG4" "BSkG5"
 
 # Load whatever
 module load python/3.12
+# load tantalus ??
 
 # module load fortran_compiler
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
