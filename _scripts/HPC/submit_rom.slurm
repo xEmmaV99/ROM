@@ -7,8 +7,12 @@
 #SBATCH --time=04:00:00       # Max time limit
 # If you run into memory issues, specify it using --mem-per-cpu (e.g. --mem-per-cpu=4G)
 
+SMEAR=1.0
+PARAM="BSkG2"
+
 # Load whatever
 module load python/3.12
+
 # module load fortran_compiler
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
@@ -16,7 +20,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 set -e
 
 MODULE_NAME=$(echo "$SCRIPT_DIR" | sed 's/.*ROM\///' | sed 's/\//./g')
-python -m "$MODULE_NAME.run_pipeline" ${SLURM_NTASKS}
+python -m "$MODULE_NAME.run_pipeline" ${SLURM_NTASKS} ${SMEAR} ${PARAM}
 
 echo "Executing FAM runs in Parallel..."
 mkdir -p "$SCRIPT_DIR/task_logs"
