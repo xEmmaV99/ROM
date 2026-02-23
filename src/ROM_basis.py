@@ -192,7 +192,7 @@ class ROM_builder:
         for iteration, omega in enumerate(omegas):
             Rew = omega.real
             Imw = omega.imag
-            file = run_folder.joinpath(f"fam_run.{d.num_neutron}.{d.num_proton}.{d.num_neutron_wf}.{d.num_proton}.{d.param}.{d.size}.{Rew}+{Imw}j.sh")
+            file = run_folder.joinpath(f"fam_run.{d.num_neutron}.{d.num_proton}.{d.num_neutron_wf}.{d.num_proton_wf}.{d.param}.{d.size}.{Rew}+{Imw}j.sh")
             file.parent.mkdir(parents=True, exist_ok=True)
 
             script = f"""\
@@ -394,8 +394,13 @@ fam_check=$?
             snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)
 
             ### greedy loop
-            FdF = F.conj().T @ F
             for k in range(initial_vectors, d.num_snapshots):
+                FdF = F.conj().T @ F
+
+                if len(snapshot_omegas) >= d.num_snapshots: #useless statement for now...
+                    print("Number of snapshots reached")
+                    break
+
                 #todo consider adding value threshold instead fo num snap, or both
                 COSTS = np.zeros(len(W_scan))
 
@@ -422,9 +427,6 @@ fam_check=$?
                                       snapshot_omegas=snapshot_omegas)
 
                 # ADD NEW SNAPSHOT WITH MAX COST
-                if len(snapshot_omegas) >= d.num_snapshots:
-                    print("Number of snapshots reached")
-                    break
                 max_cost_idx = np.argmax(COSTS)
 
                 print('Initiating new FAM run for new snapshot: ', W_scan[max_cost_idx])
@@ -444,9 +446,9 @@ fam_check=$?
 
                 self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
                                                        output_dir=self.output_dir,
-                                                        output_name=out_name)
+                                                       output_name=out_name)
 
-                snapshots, snapshot_omegas, _ = parse_XY_numba(self.path_to_snapshot) # update
+                snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot) # update
 
         else: raise ValueError("Unknown build type: " + self.build_type+". Supported types: equidistant_1D, greedy, contour")
 
