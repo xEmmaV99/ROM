@@ -281,9 +281,10 @@ def merge_FAM_outputs(folder, master_file=None, output_dir=Path('../_outputs'), 
         )
     print("Merge completed. Snapshot file created at: ", path_to_snapshot)
 
-    # # remove files and folders in the directory
-    # for f in Path(folder).glob('*'):
-    #     f.unlink()
+    if cleanup:
+        # remove files and folders in the directory
+        for f in Path(folder).glob('*'):
+            f.unlink()
 
 
 def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False):
