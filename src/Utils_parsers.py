@@ -268,7 +268,7 @@ def parse_XY_numba(filename, return_idx=False):
     return RESULT, omegas, F_data
 
 
-def merge_FAM_outputs(folder, master_file=None):
+def merge_FAM_outputs(folder, master_file=None, output_dir=Path('../_outputs'), cleanup=True):
     if master_file is None:
         out_name=''
     else:
@@ -276,14 +276,14 @@ def merge_FAM_outputs(folder, master_file=None):
 
     path_to_snapshot = combine_FAM_output(
             directory=folder,
-            output_dir=Path('../_outputs'),
+            output_dir=output_dir,
             output_name=out_name
         )
     print("Merge completed. Snapshot file created at: ", path_to_snapshot)
 
-    # remove files and folders in the directory
-    for f in Path(folder).glob('*'):
-        f.unlink()
+    # # remove files and folders in the directory
+    # for f in Path(folder).glob('*'):
+    #     f.unlink()
 
 
 def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False):
@@ -463,7 +463,8 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
         #todo, check if output file already exists and if not, then create empty file
         pass
 
+    #todo= mastername
+
     concat_fam_files(directory)
     out_file = concat_xy_files(directory)
-    print(out_file)
     return Path(out_file)

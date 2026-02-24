@@ -2,13 +2,19 @@
 For a given meanfield solution, start to build a ROM basis for the response function.
 """
 import re
-import subprocess
-from concurrent.futures import ThreadPoolExecutor
+try:
+    import subprocess
+    from concurrent.futures import ThreadPoolExecutor
+except ImportError:
+    print("subprocess and concurrent.futures modules are required for launching FAM runs. Please make sure to have them available.")
 from pathlib import Path
 import numpy as np
-from functools import cached_property
-from src.Utils_basis import cost_numba, _evaluate_PG_numba_coef
-from src.Utils_parsers import parse_XY_numba, combine_FAM_output
+try:
+    from functools import cached_property
+    from src.Utils_basis import cost_numba, _evaluate_PG_numba_coef
+    from src.Utils_parsers import parse_XY_numba, combine_FAM_output
+except ImportError:
+    print("Numba not installed.")
 import platform
 
 class ROM_basis:
@@ -120,7 +126,11 @@ class ROM_builder:
 
         BASE_DIR = Path(__file__).resolve().parent
         self.working_directory = BASE_DIR.joinpath('work_dir')
-        self.working_directory_linux = self.working_directory.as_posix().replace("C:/", "/mnt/c/") # for WSL
+        # todo consider making a function of working dir so i can change it to linux or back..
+
+        ### check if workdir exists
+
+
 
         # check if Tantalus is installed, if not raise error
         self.set_TANTALUS_path(tantalus_path)
@@ -227,7 +237,7 @@ xyfile="../$logdir_name/xy.$protons.$neutrons.$nwn.$nwp.$l.$m.$param.$size.xy$OU
 exe="Tantalus.$pref.exe"              # full name of the mean-field executable
 exefam="fam.$pref.exe"                # full name of the fam executable
 param="$param"                         # name of the parameterization
-workdir="{self.working_directory_linux}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
+workdir="{self.working_directory.as_posix().replace("C:/", "/mnt/c/")}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
 
 if [ ! -d "$workdir/" ]; then
   mkdir "$workdir"
@@ -336,7 +346,7 @@ fam_check=$?
             fam_runfiles = self._create_fam_runfiles(omegas, output_folder=self.tmp_output)
 
             if self.run_type == 'default':
-                base_dir = Path(f"src/work_dir/{self.tmp_output}")
+                base_dir = Path(f"src/work_dir/{self.tmp_output}") #todo @debug emma path
                 base_dir.mkdir(parents=True, exist_ok=True)
 
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -377,7 +387,9 @@ fam_check=$?
 
                 # initiate two FAM runs
                 fam_runfiles = self._create_fam_runfiles([w1,w2], output_folder=self.tmp_output)
-                base_dir = Path(f"src/work_dir/{self.tmp_output}")
+                #base_dir = Path(f"src/work_dir/{self.tmp_output}")
+                base_dir = self.working_directory.joinpath(self.tmp_output)
+
                 base_dir.mkdir(parents=True, exist_ok=True)
 
                 with ThreadPoolExecutor(max_workers=2) as executor:

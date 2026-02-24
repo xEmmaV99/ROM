@@ -10,8 +10,10 @@ if __name__ == "__main__":
 
 #    WAVE_FUNCTION = f'/mnt/c/users/emmav/PycharmProjects/ROM/_inputs/wf.12.12.150.150.{param}.8'
 #    MF_OUT = f'/mnt/c/users/emmav/PycharmProjects/ROM/_inputs/mf.12.12.150.150.{param}.8.out'
-    WAVE_FUNCTION = f'/home/vancayseele/_inputs/wf.12.12.150.150.{param}.8'
-    MF_OUT = f'/home/vancayseele/ROM/_inputs/mf.12.12.150.150.{param}.8.out'
+    CODEDIR = '/gpfs/home/acad/ulb-iaa/pdemol/code/'
+
+    WAVE_FUNCTION = f'{CODEDIR}ROM/_inputs/wf.12.12.200.200.{param}'
+    MF_OUT = f'{CODEDIR}ROM/_inputs/mf.12.12.200.200.{param}.out'
 
     FAM_INPUT = {'w_min': 0.0,
                  'w_max': 50.0,
@@ -24,8 +26,11 @@ if __name__ == "__main__":
     builder = ROM_builder(path_to_meanfield_wf=WAVE_FUNCTION,
                           path_to_meanfield_out=MF_OUT,
                           FAM=FAM_INPUT,
-                          tantalus_path='/home/vancayseele/code/tantalus/' #'~/code/tantalus/'
+                          tantalus_path=f'{CODEDIR}/tantalus/' #'~/code/tantalus/'
                           )
+
+    builder.working_directory = builder.working_directory.parent.joinpath(f'work_dir.{param}.{smear}')
+    builder.working_directory.mkdir(parents=True, exist_ok=True)
 
     builder.set_run_type("generate_runfiles")
     builder.set_build_type("equidistant_1D")
