@@ -227,7 +227,7 @@ xyfile="../$logdir_name/xy.$protons.$neutrons.$nwn.$nwp.$l.$m.$param.$size.xy$OU
 exe="Tantalus.$pref.exe"              # full name of the mean-field executable
 exefam="fam.$pref.exe"                # full name of the fam executable
 param="$param"                         # name of the parameterization
-workdir="{self.working_directory_linux}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
+workdir="{self.working_directory}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
 
 if [ ! -d "$workdir/" ]; then
   mkdir "$workdir"
