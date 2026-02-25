@@ -123,14 +123,10 @@ class ROM_builder:
         self.basis = ROM_basis() # to be loaded!!
         self.basis.load = self.load # overwrite function to have the same function but ALSO save path
 
-
-        BASE_DIR = Path(__file__).resolve().parent
-        self.working_directory = BASE_DIR.joinpath('work_dir')
+        self.working_directory = self.get_base_dir().joinpath('work_dir')
         # todo consider making a function of working dir so i can change it to linux or back..
 
         ### check if workdir exists
-
-
 
         # check if Tantalus is installed, if not raise error
         self.set_TANTALUS_path(tantalus_path)
@@ -146,6 +142,8 @@ class ROM_builder:
         self.tmp_output = "TMP_SNAPSHOTS"
         self.output_dir = self.working_directory.parent.parent.joinpath("_outputs")
 
+    def get_base_dir(self):
+        return Path(__file__).resolve().parent
 
     def set_TANTALUS_path(self, path):
         self.TANTALUS_PATH = path
@@ -360,9 +358,6 @@ fam_check=$?
             ### start calculations to allow contour integration!
             if self.basis.is_loaded():
                 print("Basis already loaded. Adding samples")
-                out_name = str(self.path_to_snapshot).split('xy')[-2][1:-1]
-            else:
-                out_name = ''
             # check if contour parameters are set
             if not hasattr(self, 'contour_n') or not hasattr(self, 'contour_R') or not hasattr(self, 'contour_r'):
                 raise ValueError("Contour parameters not set. Please set contour parameters before building contour basis.")
@@ -374,7 +369,8 @@ fam_check=$?
                     executor.map(launch_fam, fam_runfiles.iterdir())
                 print("FAM launch completed, merging ...")
                 self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
-                                                           output_dir=self.output_dir, output_name=out_name)
+                                                           output_dir=self.output_dir,
+                                                           master_file=self.path_to_snapshot if self.basis.is_loaded() else None)
 
         elif self.build_type == 'greedy':
             # iterative basis creation
@@ -450,15 +446,9 @@ fam_check=$?
                 launch_fam(fam_runfile)
                 print("FAM launch completed for new snapshot.")
 
-                # merge files and read new snapshot
-                if self.basis.is_loaded():
-                    out_name = str(self.path_to_snapshot).split('xy')[-2][1:-1]
-                else:
-                    out_name = ''
-
                 self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
                                                        output_dir=self.output_dir,
-                                                       output_name=out_name)
+                                                       master_file=self.path_to_snapshot if self.basis.is_loaded() else None)
 
                 snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot) # update
 

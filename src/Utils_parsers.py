@@ -287,67 +287,82 @@ def merge_FAM_outputs(folder, master_file=None, output_dir=Path('../_outputs'), 
             f.unlink()
 
 
-def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False):
+def combine_FAM_output(directory, output_name='', master_file=None, output_dir=None, verbose=True):
+    """
+    :param directory: str, directory of the FAM output TO BE MERGED
+    :param output_name: str, name of the output (fam.{}.fam and xy.{}.xy)
+    :param master_file: if previous data exists, provide the path to the .xy file!
+    :param output_dir:  directory to put the output, Path() object!
+    :param verbose:  if True, print info
+    :return:
+    """
+    print(master_file)
+
     import glob
     import numpy as np
     import pandas as pd
     print('Combining FAM output')
     def concat_fam_files(directory):
         # get a list of all the .fam files in the directory
-        if verbose: print(glob.glob(directory + '/*.famV0'))
+        if verbose: print("glob", glob.glob(directory + '/*.famV0'))
 
-        if output_name != '':
-            dump_file = [str(output_dir.joinpath('fam_data.'+output_name+'.fam'))]
+        if master_file is not None:
+            file_path =str(master_file.parent.joinpath("fam_data."+str(master_file).split('xy')[-2][1:-1]+".fam"))
         else:
-            dump_file = glob.glob(directory + '/*.famV0') # if multiple famV0
-        for file_path in dump_file:
-            name = file_path.split('\\')[-1].split('/')[-1]
-            if verbose: print('Processing:', name)
-            fam_files=[]
-            for f in list(Path(directory).glob(f"{name[:-1]}*")):
-                fam_files.append(f)
-            if len(fam_files) > 0:
-                if file_path not in fam_files:
-                    fam_files.append(file_path) #master
-                if verbose: print(f'Merging', fam_files)
+            file_path = glob.glob(directory + '/*.famV0')[0]
 
-                # open the last file to get the header (trailing '#' signs)
-                with open(fam_files[-1], 'r') as f:
+        name = glob.glob(directory + '/*.famV0')[0].split('\\')[-1].split('/')[-1]
+        if verbose: print('Processing:', name)
+
+        fam_files=[]
+        for f in list(Path(directory).glob(f"{name[:-1]}*")):
+            fam_files.append(f)
+        if len(fam_files) > 0:
+            if file_path not in fam_files:
+                fam_files.append(file_path) #master
+            if verbose: print(f'Merging', fam_files)
+
+            # open the last file to get the header (trailing '#' signs)
+            with open(fam_files[-1], 'r') as f:
+                lines = f.readlines()
+            header = [line for line in lines if line.strip().startswith('#')]
+            # join lines into string and remove last newline sign
+            header = ''.join(header)[:-1]
+
+            # check if the other headers are the same (as a simple consistency check)
+            for fam_file in fam_files[:-1]:
+                with open(fam_file, 'r') as f:
                     lines = f.readlines()
-                header = [line for line in lines if line.strip().startswith('#')]
-                # join lines into string and remove last newline sign
-                header = ''.join(header)[:-1]
 
-                # check if the other headers are the same (as a simple consistency check)
-                for fam_file in fam_files[:-1]:
-                    with open(fam_file, 'r') as f:
-                        lines = f.readlines()
+                header_i_lines = [line for line in lines if line.lstrip().startswith('#')]
+                header_i = ''.join(header_i_lines)[:-1]
 
-                    header_i_lines = [line for line in lines if line.lstrip().startswith('#')]
-                    header_i = ''.join(header_i_lines)[:-1]
+                if header_i != header:
+                    raise Exception(f'Header in file {fam_file} differs from that in {fam_files[0]}')
 
-                    if header_i != header:
-                        raise Exception(f'Header in file {fam_file} differs from that in {fam_files[0]}')
+            # read the data in all fam files using pandas
+            df_list = [df for fam_file in fam_files if (df := read_fam_data(fam_file)) is not None]
+            # Filter out empty DataFrames
+            df_list = [df for df in df_list if not df.empty]
 
-                # read the data in all fam files using pandas
-                df_list = [df for fam_file in fam_files if (df := read_fam_data(fam_file)) is not None]
-                # Filter out empty DataFrames
-                df_list = [df for df in df_list if not df.empty]
+            # concatenate all the dataframes, ignoring the arbitrary index
+            df_combined = pd.concat(df_list, ignore_index=True)
 
-                # concatenate all the dataframes, ignoring the arbitrary index
-                df_combined = pd.concat(df_list, ignore_index=True)
+            # sort on omega
+            df_cleaned = df_combined.drop_duplicates().sort_values(by=df_combined.columns[0])
 
-                # sort on omega
-                df_cleaned = df_combined.drop_duplicates().sort_values(by=df_combined.columns[0])
+            # write combined output to famfileout
+            if verbose: print("name", name)
 
-                # write combined output to famfileout
-                if verbose: print("name", name)
-                if output_name == '':
-                    famfileout = output_dir.joinpath(name.split('\\')[-1].split('.famV')[0] + '.fam')
-                else:
-                    famfileout = output_dir.joinpath('fam_data.'+output_name + '.fam')
-                write_fam_data(df_cleaned, header, famfileout)
-                if verbose: print(f'Combined output written to "{famfileout}": ')
+            if output_name == '' and master_file is None:
+                famfileout = output_dir.joinpath(name.split('\\')[-1].split('.famV')[0] + '.fam')
+            elif output_name != '':
+                famfileout = output_dir.joinpath('fam_data.'+output_name + '.fam')
+            else:
+                famfileout = Path(master_file)
+
+            write_fam_data(df_cleaned, header, famfileout)
+            if verbose: print(f'Combined output written to "{famfileout}": ')
         return
 
     def concat_xy_files(directory):
@@ -355,54 +370,56 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
         concatenate .xy files from different runs together.
         """
         if output_name != '':
-            dump_file = [str(output_dir.joinpath('xy.'+output_name+'.xy'))]
+            file_path = str(master_file)
         else:
-            dump_file = glob.glob(directory + '/*.xyV0') # if multiple famV0
-        for file_path in dump_file:
-            name = file_path.split('\\')[-1].split('/')[-1]
-            if verbose: print('Processing:', name)
-            xy_files=[]
+            file_path = glob.glob(directory + '/*.xyV0')[0] # if multiple famV0
 
-            all_header = None
-            all_blocks = []
-            for f in list(Path(directory).glob(name[:-1] + '*')):
-                xy_files.append(f)
+        name = glob.glob(directory + '/*.xyV0')[0].split('\\')[-1].split('/')[-1]
+        if verbose: print('Processing:', name)
+        xy_files=[]
 
-            if len(xy_files) > 0:
-                if file_path not in xy_files:
-                    xy_files.append(file_path)
-                if verbose: print(f'Merging', xy_files)
+        all_header = None
+        all_blocks = []
+        for f in list(Path(directory).glob(name[:-1] + '*')):
+            xy_files.append(f)
 
-            for i, file_path in enumerate(xy_files):
-                header, omega_blocks = XY_parse_file(file_path)
-                # Keep header only from first file
-                if all_header is None:
-                    all_header = header
-                # Check if other headers are the same
-                else:
-                    if header != all_header:
-                        raise Exception(f'Header in file {file_path} differs from that in {xy_files[0]}')
-                all_blocks.extend(omega_blocks)
+        if len(xy_files) > 0:
+            if file_path not in xy_files:
+                xy_files.append(file_path)
+            if verbose: print(f'Merging', xy_files)
 
-            all_blocks.sort(key=lambda x: x[0])
-            # don't allow for duplicate x[0]'s so the omegas
-            tmp = []
-            for block in all_blocks:
-                if block[0] in [tmp[k][0] for k in range(len(tmp))]:
-                    pass
-                else:
-                    tmp.append(block)
-            all_blocks = tmp
-
-            if output_name == '':
-                out = output_dir.joinpath(file_path.split('\\')[-1].split('/')[-1].split('.xy')[0]+'.xy')
+        for i, file_path in enumerate(xy_files):
+            header, omega_blocks = XY_parse_file(file_path)
+            # Keep header only from first file
+            if all_header is None:
+                all_header = header
+            # Check if other headers are the same
             else:
-                out = output_dir.joinpath('xy.' + output_name + '.xy')
+                if header != all_header:
+                    raise Exception(f'Header in file {file_path} differs from that in {xy_files[0]}')
+            all_blocks.extend(omega_blocks)
 
-            with open(out, "w") as out:
-                out.writelines(all_header)
-                for omega, block_lines in all_blocks:
-                    out.writelines(block_lines)
+        all_blocks.sort(key=lambda x: x[0])
+        # don't allow for duplicate x[0]'s so the omegas
+        tmp = []
+        for block in all_blocks:
+            if block[0] in [tmp[k][0] for k in range(len(tmp))]:
+                pass
+            else:
+                tmp.append(block)
+        all_blocks = tmp
+
+        if output_name == '' and master_file is None:
+            out = output_dir.joinpath(name.split('\\')[-1].split('/')[-1].split('.xy')[0]+'.xy')
+        elif output_name != '':
+            out = output_dir.joinpath('xy.' + output_name + '.xy')
+        else:
+            out = Path(master_file)
+
+        with open(out, "w") as out:
+            out.writelines(all_header)
+            for omega, block_lines in all_blocks:
+                out.writelines(block_lines)
 
             if verbose: print(f"Written combined file: {out}")
 
@@ -458,13 +475,6 @@ def combine_FAM_output(directory, output_name='', output_dir=None, verbose=False
         fmt = '%10.3f %10.3f %8i %25.12E %25.12E %25.12E %25.12E %25.12E %25.12E %25.12E'
         with open(filename, 'w') as f:
             np.savetxt(f, df.values, fmt=fmt, header=header, comments='')
-
-
-    if output_name != '':
-        #todo, check if output file already exists and if not, then create empty file
-        pass
-
-    #todo= mastername
 
     concat_fam_files(directory)
     out_file = concat_xy_files(directory)
