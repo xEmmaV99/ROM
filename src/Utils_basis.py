@@ -3,7 +3,7 @@ from numba import njit, prange
 
 
 @njit(fastmath=True, cache=True)
-def cost_numba(omega, alpha, FdF, MXdF, XMMX, snapshot_omegas):
+def cost_numba(omega, alpha, FdF, MXdF, XMMX, F_norm, snapshot_omegas):
     alpha_flat = alpha.ravel()
     MXdF_flat = MXdF.ravel()
     n = len(alpha_flat)
@@ -35,7 +35,7 @@ def cost_numba(omega, alpha, FdF, MXdF, XMMX, snapshot_omegas):
     term_cross_A = c_F * cross_part
     real_cross = 2.0 * term_cross_A.real
 
-    return term_FF.real + term_XX.real + real_cross
+    return 1/F_norm*(term_FF.real + term_XX.real + real_cross)
 
 @njit(parallel=True, fastmath=True, cache=True)
 def _evaluate_PG_numba_coef(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX):

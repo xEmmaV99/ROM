@@ -408,6 +408,7 @@ fam_check=$?
             snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)
 
             ### greedy loop
+            # todo -- 2D greedy search
             self.greedy_cost_threshold = 0.0
             print("Hardcoded cost threshold for greedy selection: ", self.greedy_cost_threshold)
 
@@ -442,7 +443,7 @@ fam_check=$?
 
                     COSTS[idx] = cost_numba(omega=omega_test,
                                       alpha=alpha,
-                                      FdF=FdF, MXdF=MXdF, XMMX=XMMX,
+                                      FdF=FdF, MXdF=MXdF, XMMX=XMMX, F_norm=np.linalg.norm(F),
                                       snapshot_omegas=snapshot_omegas)
 
                 # ADD NEW SNAPSHOT WITH MAX COST
