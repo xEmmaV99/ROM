@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     FAM_INPUT = {'w_min': 0.0,
                  'w_max': 50.0,
-                 'num_snapshots': num_snaps,  # number of snapshots to generate
+                 'max_num_snapshots': num_snaps,  # number of snapshots to generate
                  'smear': smear,
                  'l': 0,  # multipolarity
                  'm': 0,  # magnetic quantum number

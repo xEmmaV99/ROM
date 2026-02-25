@@ -56,12 +56,13 @@ class data:
         self.size = parse["size"]
 
         self.param_prefix = {"BSkG2": "BXL",
+                             "BSkG4": "BXL",
                              "BSkG5": "BXL-N2LO"}  # dict for parameterization prefixes @ tantalus specific
 
         self._fam_defaults = {
             'w_min': 0.0,
             'w_max': 20.0,
-            'num_snapshots': 20,
+            'max_num_snapshots': 20, # consider moving this to the builder
             'smear': 1.0,
             'l': 0,
             'm': 0
@@ -141,6 +142,11 @@ class ROM_builder:
         self.run_type = 'default' # run all by default
         self.tmp_output = "TMP_SNAPSHOTS"
         self.output_dir = self.working_directory.parent.parent.joinpath("_outputs")
+
+        self.greedy_settings = {"2D_search": False,
+                                "target_smearing": 0.1,
+                                "cost_threshold": 0.0}
+
 
     def get_base_dir(self):
         return Path(__file__).resolve().parent
@@ -338,20 +344,20 @@ fam_check=$?
 
         if self.build_type == 'equidistant_1D':
             # static basis creation
-            omegas = np.linspace(d.w_min, d.w_max, num=d.num_snapshots) + d.smear * 1.j
+            omegas = np.linspace(d.w_min, d.w_max, num=d.max_num_snapshots) + d.smear * 1.j
             if self.basis.is_loaded():
                 raise AssertionError("Basis already loaded. Cannot initiate equidistant sampling.")
             fam_runfiles = self._create_fam_runfiles(omegas, output_folder=self.tmp_output)
 
             if self.run_type == 'default':
-                base_dir = Path(f"src/work_dir/{self.tmp_output}") #todo @debug emma path
-                base_dir.mkdir(parents=True, exist_ok=True)
+                dir = self.working_directory.joinpath(self.tmp_output)
+                dir.mkdir(parents=True, exist_ok=True)
 
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     executor.map(launch_fam, fam_runfiles.iterdir())
 
                 print("FAM launch completed, merging ...")
-                self.path_to_snapshot = combine_FAM_output(directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
+                self.path_to_snapshot = combine_FAM_output(directory=fr"{dir}",
                                                            output_dir=self.output_dir)
 
         elif self.build_type == 'contour':
@@ -397,19 +403,24 @@ fam_check=$?
                                                       output_name='')
             else:
                 initial_vectors = len(self.basis.omegas)
-                print(f"Initial basis loaded. Continuing to add {self.data.num_snapshots-initial_vectors} vectors")
+                print(f"Initial basis loaded. Continuing to add {self.data.max_num_snapshots-initial_vectors} vectors")
 
             snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)
 
             ### greedy loop
-            for k in range(initial_vectors, d.num_snapshots):
+            self.greedy_cost_threshold = 0.0
+            print("Hardcoded cost threshold for greedy selection: ", self.greedy_cost_threshold)
+
+            GREEDY_COST = np.infty
+            k=-1
+            while GREEDY_COST > self.greedy_cost_threshold and len(snapshot_omegas) < d.max_num_snapshots:
+                k+=1
                 FdF = F.conj().T @ F
 
-                if len(snapshot_omegas) >= d.num_snapshots: #useless statement for now...
+                if len(snapshot_omegas) >= d.max_num_snapshots: #useless statement for now...
                     print("Number of snapshots reached")
                     break
 
-                #todo consider adding value threshold instead fo num snap, or both
                 COSTS = np.zeros(len(W_scan))
 
                 X = snapshots[:, 0, :]
@@ -451,6 +462,8 @@ fam_check=$?
                                                        master_file=self.path_to_snapshot if self.basis.is_loaded() else None)
 
                 snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot) # update
+
+                GREEDY_COST = np.max(COSTS)
 
         else: raise ValueError("Unknown build type: " + self.build_type+". Supported types: equidistant_1D, greedy, contour")
 

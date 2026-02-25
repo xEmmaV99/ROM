@@ -29,7 +29,7 @@ class TestSamplers:
         MF_OUT = '/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/mf.12.12.30.30.out'
         FAM_INPUT = {'w_min': 0.0,
                      'w_max': 40.0,
-                     'num_snapshots': 5,
+                     'max_num_snapshots': 5,
                      'smear': 1.0,
                      'l': 0,  # multipolarity
                      'm': 0,  # magnetic quantum number
@@ -53,7 +53,7 @@ class TestSamplers:
         MF_OUT = '/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/mf.12.12.30.30.out'
         FAM_INPUT = {'w_min': 0.0,
                      'w_max': 40.0,
-                     'num_snapshots': 5,
+                     'max_num_snapshots': 5,
                      'smear': 1.0,
                      'l': 0,  # multipolarity
                      'm': 0,  # magnetic quantum number
