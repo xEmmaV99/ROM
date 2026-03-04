@@ -2,6 +2,9 @@ from pathlib import Path
 import numpy as np
 from numba import njit
 
+def _filepath():
+    return Path(__file__)
+
 @njit(inline='always', cache=True)
 def _skip_ws(data, ptr, n):
     while ptr < n and (data[ptr] == 32 or data[ptr] == 9 or
@@ -268,11 +271,14 @@ def parse_XY_numba(filename, return_idx=False):
     return RESULT, omegas, F_data
 
 
-def merge_FAM_outputs(folder, master_file=None, output_dir=Path('../_outputs'), cleanup=True):
+def merge_FAM_outputs(folder, master_file=None, output_dir=None, cleanup=True):
     if master_file is None:
         out_name=''
     else:
         out_name = str(master_file).split('xy')[-2][1:-1]
+
+    if output_dir is None:
+        output_dir = _filepath().parent.parent.joinpath("_outputs")
 
     path_to_snapshot = combine_FAM_output(
             directory=folder,
