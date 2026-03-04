@@ -114,6 +114,8 @@ class ROM_builder:
                  FAM,
                  tantalus_path="$HOME/code/tantalus/"):
         self._DEBUG_clear_wd = True # if False, the output files are not merged and the working dir is not cleared. Only used for debugging purposes
+        self._build_types = ['equidistant_1D', 'greedy', 'greedy_2D','contour']
+        self._run_types = ['generate_runfiles', 'default']
 
         self.data = data(path_to_meanfield_out)
         self.data.set_FAM_parameters(FAM)
@@ -143,9 +145,9 @@ class ROM_builder:
         self.tmp_output = "TMP_SNAPSHOTS"
         self.output_dir = self.working_directory.parent.parent.joinpath("_outputs")
 
-        self.greedy_settings = {"2D_search": False,
-                                "target_smearing": 0.1,
-                                "cost_threshold": 0.0}
+        self.greedy_settings = {"cost_threshold": 0.0}
+        self.greedy_2D_settings = {"cost_threshold": 0.0, #threshold of the greedy snapshot cost cutoff
+                                   "cost_relaxation": 0.1} #selecting snapshots below 0.1 relative cost
 
 
     def get_base_dir(self):
@@ -156,16 +158,14 @@ class ROM_builder:
 
 
     def set_build_type(self, build_type):
-        supported = ['equidistant_1D', 'greedy', 'contour']
-        if build_type not in supported:
-            raise ValueError("Unknown build type. Supported types: " + ", ".join(supported))
+        if build_type not in self._build_types:
+            raise ValueError("Unknown build type. Supported types: " + ", ".join(self._build_types))
         self.build_type = build_type
 
 
     def set_run_type(self, run_type):
-        supported = ['generate_runfiles', 'default']
-        if run_type not in supported:
-            raise ValueError("Unknown build type. Supported types: " + ", ".join(supported))
+        if run_type not in self._run_types:
+            raise ValueError("Unknown build type. Supported types: " + ", ".join(self._run_types))
         if run_type == 'generate_runfiles' and self.build_type == 'greedy':
             raise ValueError("Cannot only generate runfiles for greedy build type, as it requires iterative runs.")
         self.run_type = run_type
@@ -340,6 +340,10 @@ fam_check=$?
         if run_type is not None:
             self.set_run_type(run_type)
 
+        ## clear up wd
+        if self._DEBUG_clear_wd:
+            self._clear_working_directory()
+
         d = self.data
 
         if self.build_type == 'equidistant_1D':
@@ -408,19 +412,10 @@ fam_check=$?
             snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)
 
             ### greedy loop
-            # todo -- 2D greedy search
-            self.greedy_cost_threshold = 0.0
-            print("Hardcoded cost threshold for greedy selection: ", self.greedy_cost_threshold)
-
-            GREEDY_COST = np.infty
-            k=-1
-            while GREEDY_COST > self.greedy_cost_threshold and len(snapshot_omegas) < d.max_num_snapshots:
-                k+=1
+            GREEDY_COST = np.inf
+            while GREEDY_COST > self.greedy_settings["cost_threshold"] and len(snapshot_omegas) < d.max_num_snapshots:
+                k=len(snapshot_omegas)+1
                 FdF = F.conj().T @ F
-
-                if len(snapshot_omegas) >= d.max_num_snapshots: #useless statement for now...
-                    print("Number of snapshots reached")
-                    break
 
                 COSTS = np.zeros(len(W_scan))
 
@@ -428,9 +423,6 @@ fam_check=$?
                 Y = snapshots[:, 1, :]
 
                 diff_XY = X - Y
-                print("DE3BUG GREEDY CALC")
-                print("X shape: ", X.shape)
-                print("F shape: ", F.shape)
 
                 MXdF = diff_XY.conj() @ F
                 FdMX = MXdF.conj()
@@ -466,7 +458,106 @@ fam_check=$?
 
                 GREEDY_COST = np.max(COSTS)
 
-        else: raise ValueError("Unknown build type: " + self.build_type+". Supported types: equidistant_1D, greedy, contour")
+        elif self.build_type == 'greedy_2D':
+            # Define the W_scan @ the target smearing
+            W_scan = np.linspace(d.w_min, d.w_max, num=2000) + d.smear * 1.j
+
+            initial_vectors = 5
+            if not self.basis.is_loaded():
+                # choose FIVE snapshots, say at 0.25 and 0.75 from the spectrum @ 10 times the target smearing !
+                ws = np.linspace( 0.25 * (d.w_max - d.w_min) ,  0.75 * (d.w_max - d.w_min), initial_vectors) + 10 * d.smear * 1.j
+                # initiate two FAM runs
+                fam_runfiles = self._create_fam_runfiles(ws, output_folder=self.tmp_output)
+                self.working_directory.joinpath(self.tmp_output).mkdir(parents=True, exist_ok=True)
+
+                with ThreadPoolExecutor(max_workers=5) as executor:
+                    executor.map(launch_fam, fam_runfiles.iterdir())
+
+                print("Initial FAM launch completed.")
+                self.path_to_snapshot = combine_FAM_output(
+                    directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
+                    output_dir=self.output_dir,
+                    output_name='')
+            else:
+                initial_vectors = len(self.basis.omegas)
+                print(
+                    f"Initial basis loaded. Continuing to add {self.data.max_num_snapshots - initial_vectors} vectors")
+
+            snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)
+
+            ### greedy loop
+            GREEDY_COST = np.inf
+            while GREEDY_COST > self.greedy_2D_settings["cost_threshold"] and len(snapshot_omegas) < d.max_num_snapshots:
+                k = len(snapshot_omegas)
+                FdF = F.conj().T @ F
+
+                COSTS = np.zeros(len(W_scan))
+
+                X = snapshots[:, 0, :]
+                Y = snapshots[:, 1, :]
+
+                diff_XY = X - Y
+
+                MXdF = diff_XY.conj() @ F
+                FdMX = MXdF.conj()
+                XMMX = X.conj() @ X.T + Y.conj() @ Y.T
+
+                # we find the "ideal" snapshot @ the target smearing.
+                alphas = _evaluate_PG_numba_coef(W_scan, snapshot_omegas, FdF, FdMX, MXdF, XMMX)
+
+                for idx, omega_test in enumerate(W_scan):
+                    alpha = alphas[idx]
+
+                    COSTS[idx] = cost_numba(omega=omega_test,
+                                            alpha=alpha,
+                                            FdF=FdF, MXdF=MXdF, XMMX=XMMX, F_norm=np.linalg.norm(F),
+                                            snapshot_omegas=snapshot_omegas)
+
+                max_cost_idx = np.argmax(COSTS)
+                #print('Ideal new snapshot: ', W_scan[max_cost_idx])
+
+                # now, scan this omega value along the complex axis, and find the "sub"-optimal omega value
+                H_scan = np.real(W_scan[max_cost_idx]) + np.linspace(1, 20,200)*1j*d.smear
+                COSTS_H = np.zeros(len(H_scan))
+                alphas = _evaluate_PG_numba_coef(H_scan, snapshot_omegas, FdF, FdMX, MXdF, XMMX)
+                for idx, omega_test in enumerate(H_scan):
+                    alpha = alphas[idx]
+
+                    COSTS_H[idx] = cost_numba(omega=omega_test,
+                                            alpha=alpha,
+                                            FdF=FdF, MXdF=MXdF, XMMX=XMMX, F_norm=np.linalg.norm(F),
+                                            snapshot_omegas=snapshot_omegas)
+
+                # find the maximal cost in H but below a threshold
+                COSTS_H = COSTS_H / np.max(COSTS_H)  # normalise wrt "highest" one
+                threshold = self.greedy_2D_settings["cost_relaxation"]
+                COSTS_H = np.where(COSTS_H > threshold, 0.0, COSTS_H)
+                if np.all(COSTS_H == 0.0):
+                    print("No new snapshot found above threshold, adding the one with largest smearing")
+                    max_cost_idx_H = -1
+                else:
+                    max_cost_idx_H = np.argmax(COSTS_H)
+                SUB_OPTIMAL_OMEGA = H_scan[max_cost_idx_H]
+                print("Selected : ", SUB_OPTIMAL_OMEGA)
+
+                # launch new FAM run for new snapshot
+                fam_runfile = self._create_fam_runfiles([SUB_OPTIMAL_OMEGA], output_folder=self.tmp_output,
+                                                        global_iteration=k)
+                self.working_directory.joinpath(self.tmp_output).mkdir(parents=True, exist_ok=True)
+                print("debug before launch")
+                launch_fam(fam_runfile)
+                print("debug after launch")
+                print("FAM launch completed for new snapshot.")
+                self.path_to_snapshot = combine_FAM_output(
+                    directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
+                    output_dir=self.output_dir,
+                    master_file=self.path_to_snapshot if self.basis.is_loaded() else None)
+
+                snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot)  # update
+
+                GREEDY_COST = np.max(COSTS) # save the cost evaluated at target smearing
+
+        else: raise ValueError("Unknown build type: " + self.build_type+". Supported types: "+self._build_types)
 
         # clean up and load basis
         if not self._DEBUG_clear_wd:
@@ -484,6 +575,6 @@ fam_check=$?
         try:
             # load snapshots and omegas from file
             self.basis.snapshots, self.basis.omegas, self.basis.F = parse_XY_numba(path_to_snapshot)
-            self.path_to_snapshot = path_to_snapshot
+            self.path_to_snapshot = Path(path_to_snapshot)
         except FileNotFoundError:
             raise FileNotFoundError(f"Could not find snapshot {path_to_snapshot}.")

@@ -287,7 +287,7 @@ def merge_FAM_outputs(folder, master_file=None, output_dir=Path('../_outputs'), 
             f.unlink()
 
 
-def combine_FAM_output(directory, output_name='', master_file=None, output_dir=None, verbose=True):
+def combine_FAM_output(directory, output_name='', master_file=None, output_dir=None, verbose=False):
     """
     :param directory: str, directory of the FAM output TO BE MERGED
     :param output_name: str, name of the output (fam.{}.fam and xy.{}.xy)
@@ -296,8 +296,6 @@ def combine_FAM_output(directory, output_name='', master_file=None, output_dir=N
     :param verbose:  if True, print info
     :return:
     """
-    print(master_file)
-
     import glob
     import numpy as np
     import pandas as pd
@@ -359,11 +357,13 @@ def combine_FAM_output(directory, output_name='', master_file=None, output_dir=N
             elif output_name != '':
                 famfileout = output_dir.joinpath('fam_data.'+output_name + '.fam')
             else:
-                famfileout = Path(master_file)
+                # we need to convert master_file (xy) to fam_data
+                dir = master_file.parent
+                _name = master_file.name.split("xy")[-2][1:-1]
+                famfileout = dir.joinpath('fam_data.'+_name+'.fam')
 
             write_fam_data(df_cleaned, header, famfileout)
-            if verbose: print(f'Combined output written to "{famfileout}": ')
-        return
+        return famfileout
 
     def concat_xy_files(directory):
         """
@@ -476,6 +476,9 @@ def combine_FAM_output(directory, output_name='', master_file=None, output_dir=N
         with open(filename, 'w') as f:
             np.savetxt(f, df.values, fmt=fmt, header=header, comments='')
 
-    concat_fam_files(directory)
+    fam_file = concat_fam_files(directory)
     out_file = concat_xy_files(directory)
+
+    if verbose: print(f'Combined output written to "{fam_file}" and "{out_file}" ')
+
     return Path(out_file)
