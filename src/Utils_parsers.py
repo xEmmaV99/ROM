@@ -308,14 +308,14 @@ def combine_FAM_output(directory, output_name='', master_file=None, output_dir=N
     print('Combining FAM output')
     def concat_fam_files(directory):
         # get a list of all the .fam files in the directory
-        if verbose: print("glob", glob.glob(directory + '/*.famV0'))
+        if verbose: print("glob", glob.glob(directory + '/*.famV*')[0])
 
         if master_file is not None:
             file_path =str(master_file.parent.joinpath("fam_data."+str(master_file).split('xy')[-2][1:-1]+".fam"))
         else:
-            file_path = glob.glob(directory + '/*.famV0')[0]
+            file_path = glob.glob(directory + '/*.famV*')[0]
 
-        name = glob.glob(directory + '/*.famV0')[0].split('\\')[-1].split('/')[-1]
+        name = glob.glob(directory + '/*.famV*')[0].split('\\')[-1].split('/')[-1]
         if verbose: print('Processing:', name)
 
         fam_files=[]
@@ -375,12 +375,12 @@ def combine_FAM_output(directory, output_name='', master_file=None, output_dir=N
         """
         concatenate .xy files from different runs together.
         """
-        if output_name != '':
+        if master_file is not None:
             file_path = str(master_file)
         else:
-            file_path = glob.glob(directory + '/*.xyV0')[0] # if multiple famV0
+            file_path = glob.glob(directory + '/*.xyV*')[0] # if multiple famV0
 
-        name = glob.glob(directory + '/*.xyV0')[0].split('\\')[-1].split('/')[-1]
+        name = glob.glob(directory + '/*.xyV*')[0].split('\\')[-1].split('/')[-1]
         if verbose: print('Processing:', name)
         xy_files=[]
 
@@ -461,7 +461,6 @@ def combine_FAM_output(directory, output_name='', master_file=None, output_dir=N
                 omega_val = float(m.group(1))
                 smearing_val = float(m.group(2))
                 current_omega = (omega_val, smearing_val)  # store new omega as a tuple
-                print(current_omega)
                 current_block = [line]  # start new block
                 in_omega_section = True
                 continue

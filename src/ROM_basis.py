@@ -414,7 +414,6 @@ fam_check=$?
             ### greedy loop
             GREEDY_COST = np.inf
             while GREEDY_COST > self.greedy_settings["cost_threshold"] and len(snapshot_omegas) < d.max_num_snapshots:
-                k=len(snapshot_omegas)+1
                 FdF = F.conj().T @ F
 
                 COSTS = np.zeros(len(W_scan))
@@ -443,7 +442,9 @@ fam_check=$?
 
                 print('Initiating new FAM run for new snapshot: ', W_scan[max_cost_idx])
                 # launch new FAM run for new snapshot
-                fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]], output_folder=self.tmp_output, global_iteration=k)
+                fam_runfile = self._create_fam_runfiles([W_scan[max_cost_idx]],
+                                                        output_folder=self.tmp_output,
+                                                        global_iteration=len(snapshot_omegas)+1)
                 base_dir = Path(f"src/work_dir/{self.tmp_output}")
                 base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -488,7 +489,6 @@ fam_check=$?
             ### greedy loop
             GREEDY_COST = np.inf
             while GREEDY_COST > self.greedy_2D_settings["cost_threshold"] and len(snapshot_omegas) < d.max_num_snapshots:
-                k = len(snapshot_omegas)
                 FdF = F.conj().T @ F
 
                 COSTS = np.zeros(len(W_scan))
@@ -541,12 +541,13 @@ fam_check=$?
                 print("Selected : ", SUB_OPTIMAL_OMEGA)
 
                 # launch new FAM run for new snapshot
-                fam_runfile = self._create_fam_runfiles([SUB_OPTIMAL_OMEGA], output_folder=self.tmp_output,
-                                                        global_iteration=k)
+                fam_runfile = self._create_fam_runfiles([SUB_OPTIMAL_OMEGA],
+                                                        output_folder=self.tmp_output,
+                                                        global_iteration=len(snapshot_omegas)+1)
                 self.working_directory.joinpath(self.tmp_output).mkdir(parents=True, exist_ok=True)
-                print("debug before launch")
+
                 launch_fam(fam_runfile)
-                print("debug after launch")
+
                 print("FAM launch completed for new snapshot.")
                 self.path_to_snapshot = combine_FAM_output(
                     directory=fr"{self.working_directory.joinpath(self.tmp_output)}",
