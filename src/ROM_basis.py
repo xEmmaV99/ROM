@@ -107,10 +107,23 @@ class data:
     def prefix(self):
         return self.param_prefix[self.param]
 
+def convert_to_linux(path: str) -> str:
+    if platform.system() == "Windows":
+        path = path.replace("\\", "/")
+        if path[1] == ":":
+            drive = path[0].lower()
+            rest = path[2:]
+            rest = rest.lstrip("/")
+            return f"/mnt/{drive}/{rest}"
+        else:
+            return path
+    else:
+        return path
+
 class ROM_builder:
     def __init__(self,
-                 path_to_meanfield_wf,
-                 path_to_meanfield_out,
+                 path_to_meanfield_wf: str,
+                 path_to_meanfield_out: str,
                  FAM,
                  tantalus_path="$HOME/code/tantalus/"):
         self._DEBUG_clear_wd = True # if False, the output files are not merged and the working dir is not cleared. Only used for debugging purposes
@@ -121,7 +134,7 @@ class ROM_builder:
         self.data.set_FAM_parameters(FAM)
 
         self.build_type = 'equidistant_1D'
-        self.path_to_meanfield_wf = path_to_meanfield_wf
+        self.path_to_meanfield_wf = convert_to_linux(path_to_meanfield_wf)
 
         self.basis = ROM_basis() # to be loaded!!
         self.basis.load = self.load # overwrite function to have the same function but ALSO save path
@@ -241,7 +254,7 @@ xyfile="../$logdir_name/xy.$protons.$neutrons.$nwn.$nwp.$l.$m.$param.$size.xy$OU
 exe="Tantalus.$pref.exe"              # full name of the mean-field executable
 exefam="fam.$pref.exe"                # full name of the fam executable
 param="$param"                         # name of the parameterization
-workdir="{self.working_directory.as_posix().replace("C:/", "/mnt/c/")}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
+workdir="{convert_to_linux(str(self.working_directory))}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
 
 if [ ! -d "$workdir/" ]; then
   mkdir "$workdir"
