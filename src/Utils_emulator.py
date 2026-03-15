@@ -2,10 +2,17 @@ from numba import njit, prange
 import numpy as np
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_G_numba(targets, snapshot_omegas, D, M, overlap_weights):
+def _evaluate_G_numba(targets, snapshot_omegas, X, Y, F):
     n_targets = len(targets)
     n_snaps = len(snapshot_omegas)
     S = np.zeros(n_targets, dtype=np.float64)
+
+    overlap_X = np.sum(np.conj(F) * X, axis=1)
+    overlap_Y = np.sum(np.conj(F) * Y, axis=1)
+    overlap_weights = overlap_X + overlap_Y
+    D = (X + Y).conj() @ F
+    M = X.conj() @ X.T - Y.conj() @ Y.T
+
     b = -D.copy()
     for w in prange(n_targets):
         omega_target = targets[w]
@@ -36,7 +43,17 @@ def _evaluate_G_numba(targets, snapshot_omegas, D, M, overlap_weights):
     return S
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_PG_numba(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX, overlap_weights):
+def _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F): #_evaluate_PG_numba(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX, overlap_weights):
+    diff_XY = X - Y
+    MXdF = np.conj(diff_XY) @ F
+    FdF = np.vdot(F, F)
+    FdMX = np.conj(MXdF)
+    XMMX = np.conj(X) @ X.T + np.conj(Y) @ Y.T
+
+    overlap_X = np.sum(np.conj(F) * X, axis=1)
+    overlap_Y = np.sum(np.conj(F) * Y, axis=1)
+    overlap_weights = overlap_X + overlap_Y
+
     n_targets = len(targets)
     n_snaps = len(snapshot_omegas)
     S = np.zeros(n_targets, dtype=np.float64)
