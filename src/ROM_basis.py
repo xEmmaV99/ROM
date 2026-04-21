@@ -468,6 +468,7 @@ fam_check=$?
                                                        output_dir=self.output_dir,
                                                        master_file=self.path_to_snapshot if self.basis.is_loaded() else None)
 
+                # todo: change the paraser here to that it can parse just one extra one (last one in the file) and concat here...
                 snapshots, snapshot_omegas, F = parse_XY_numba(self.path_to_snapshot) # update
 
                 GREEDY_COST = np.max(COSTS)
