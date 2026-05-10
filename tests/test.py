@@ -100,9 +100,28 @@ class TestPredictions:
 
 
 
-def compare_xy_files(output_path, reference_path):
-    # todo: make less strict
-    assert output_path.read_text() == reference_path.read_text()
+
+def compare_xy_files(output_path, reference_path, tol=1e-6):
+    def load(path):
+        with open(path) as f:
+            rows = [
+                [float(x) for x in line.split()]
+                for line in f
+                if line.strip() and not line.startswith(("#", "&"))
+            ]
+        return np.array(rows)
+
+    output = load(output_path)
+    reference = load(reference_path)
+
+    if not np.allclose(output, reference, atol=tol):
+        diff = np.abs(output - reference)
+        idx = np.unravel_index(np.argmax(diff), diff.shape)
+
+        raise AssertionError(
+            f"Max difference {diff[idx]:.3e} at row {idx[0]}, col {idx[1]}: "
+            f"{output[idx]} != {reference[idx]}"
+        )
 
 
 def compare_emulated_strength(emulator : Emulator, reference_emulator_output):
