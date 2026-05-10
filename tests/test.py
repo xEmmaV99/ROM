@@ -19,14 +19,15 @@ from src.ROM_basis import ROM_builder
 test_input = Path(__file__).parent.resolve().joinpath('_inputs')
 test_output = Path(__file__).parent.resolve().joinpath('_outputs')
 test_reference = Path(__file__).parent.resolve().joinpath('_references')
+path_tantalus = '/home/emma/code/tantalus/'#'$HOME/code/tantalus/'
 
 class TestSamplers:
     """
     Can only be used when tantalus is available.
     """
     def test_equidistant(self):
-        WAVE_FUNCTION = '/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/wf.12.12.30.30'
-        MF_OUT = '/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/mf.12.12.30.30.out'
+        WAVE_FUNCTION = Path.joinpath(test_input, 'wf.12.12.30.30')#'/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/wf.12.12.30.30'
+        MF_OUT = Path.joinpath(test_input, 'mf.12.12.30.30.out')#'/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/mf.12.12.30.30.out'
         FAM_INPUT = {'w_min': 0.0,
                      'w_max': 40.0,
                      'max_num_snapshots': 5,
@@ -35,10 +36,10 @@ class TestSamplers:
                      'm': 0,  # magnetic quantum number
                      }
 
-        rom_builder = ROM_builder(path_to_meanfield_wf=WAVE_FUNCTION,
-                                  path_to_meanfield_out=MF_OUT,
+        rom_builder = ROM_builder(path_to_meanfield_wf=str(WAVE_FUNCTION),
+                                  path_to_meanfield_out=str(MF_OUT),
                                   FAM=FAM_INPUT,
-                                  tantalus_path='$HOME/code/tantalus/')
+                                  tantalus_path=path_tantalus)
 
         rom_builder.build_type = 'equidistant_1D'
         rom_builder.output_dir = test_output
@@ -49,8 +50,8 @@ class TestSamplers:
 
 
     def test_greedy(self):
-        WAVE_FUNCTION = '/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/wf.12.12.30.30'
-        MF_OUT = '/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/mf.12.12.30.30.out'
+        WAVE_FUNCTION = Path.joinpath(test_input, 'wf.12.12.30.30') #'/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/wf.12.12.30.30'
+        MF_OUT = Path.joinpath(test_input, 'mf.12.12.30.30.out')#'/mnt/c/users/emmav/PycharmProjects/ROM/tests/_inputs/mf.12.12.30.30.out'
         FAM_INPUT = {'w_min': 0.0,
                      'w_max': 40.0,
                      'max_num_snapshots': 5,
@@ -59,10 +60,10 @@ class TestSamplers:
                      'm': 0,  # magnetic quantum number
                      }
 
-        rom_builder = ROM_builder(path_to_meanfield_wf=WAVE_FUNCTION,
-                                  path_to_meanfield_out=MF_OUT,
+        rom_builder = ROM_builder(path_to_meanfield_wf=str(WAVE_FUNCTION),
+                                  path_to_meanfield_out=str(MF_OUT),
                                   FAM=FAM_INPUT,
-                                  tantalus_path='$HOME/code/tantalus/')
+                                  tantalus_path=path_tantalus)
 
         rom_builder.build_type = 'greedy'
         rom_builder.output_dir = test_output

@@ -79,7 +79,7 @@ class data:
         for key, value in params.items():
             setattr(self, key, value)
 
-    def _parse_mf(self, file):
+    def _parse_mf(self, file: str):
         # change linux path to windows path
         text = Path(file.replace("/mnt/c/", "C:/")).read_text()
 
