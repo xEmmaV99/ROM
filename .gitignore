@@ -2,3 +2,4 @@ _inputs/*
 _outputs/*
 _scripts/*
 venv/
+site/

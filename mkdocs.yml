@@ -1,0 +1,26 @@
+site_name: ROM FAMQRPA emulator Documentation
+
+theme:
+  name: material  # read_the_docs
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            show_root_heading: true
+            show_source: true
+
+
+nav:
+  - Home: index.md
+  - About: about.md
+  - Source Code:
+      - Emulator: api/emulator.md
+      - ROM Basis: api/rom_basis.md
+      - Utils Parser: api/utils_parser.md
+      - Utils Emulator: api/utils_emulator.md
+      - Utils ROM Basis: api/utils_rom_basis.md
+      # Add others as needed
