@@ -19,7 +19,7 @@ from src.ROM_basis import ROM_builder
 test_input = Path(__file__).parent.resolve().joinpath('_inputs')
 test_output = Path(__file__).parent.resolve().joinpath('_outputs')
 test_reference = Path(__file__).parent.resolve().joinpath('_references')
-path_tantalus = '/home/emma/code/tantalus/'#'$HOME/code/tantalus/'
+path_tantalus = '$HOME/code/tantalus/'
 
 class TestSamplers:
     """
@@ -87,14 +87,14 @@ class TestPredictions:
             compare_emulated_strength(emulator=e, reference_emulator_output=test_reference.joinpath(f'{emul_name}_G'))
 
             e.projection_method = "PG"
-            compare_emulated_strength(emulator=e, reference_emulator_output=test_reference.joinpath(f'{emul_name}_PG'))
+            compare_emulated_strength(emulator=e, reference_emulator_output=test_reference.joinpath(f'{emul_name}_PG.csv'))
 
-    def test_sumrule(self):
-        # TODO
-        assert True
-        # # code for sumrule prediction
-        # compare_m1() # using G
-        # compare_m1() # using PG
+    # def test_sumrule(self):
+    #     # TODO
+    #     assert True
+    #     # # code for sumrule prediction
+    #     # compare_m1() # using G
+    #     # compare_m1() # using PG
 
 
 

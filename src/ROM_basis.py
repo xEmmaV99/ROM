@@ -11,7 +11,8 @@ from pathlib import Path
 import numpy as np
 try:
     from functools import cached_property
-    from src.Utils_basis import cost_numba, _evaluate_PG_numba_coef
+    from src.Utils_basis import cost_numba
+    from src.Utils_emulator import _evaluate_PG_numba
     from src.Utils_parsers import parse_XY_numba, combine_FAM_output
 except ImportError:
     print("Numba not installed.")
@@ -436,11 +437,12 @@ fam_check=$?
 
                 diff_XY = X - Y
 
-                MXdF = diff_XY.conj() @ F
-                FdMX = MXdF.conj()
-                XMMX = X.conj() @ X.T + Y.conj() @ Y.T
-
-                alphas = _evaluate_PG_numba_coef(W_scan, snapshot_omegas, FdF, FdMX, MXdF, XMMX)
+                # MXdF = diff_XY.conj() @ F
+                # FdMX = MXdF.conj()
+                # XMMX = X.conj() @ X.T + Y.conj() @ Y.T
+                # TODO UPDATE @emma
+                #alphas = _evaluate_PG_numba_coef(W_scan, snapshot_omegas, FdF, FdMX, MXdF, XMMX)
+                _, alphas = _evaluate_PG_numba(W_scan, snapshot_omegas, X, Y, F)
 
                 for idx, omega_test in enumerate(W_scan):
                     alpha = alphas[idx]

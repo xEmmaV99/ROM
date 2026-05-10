@@ -36,30 +36,3 @@ def cost_numba(omega, alpha, FdF, MXdF, XMMX, F_norm, snapshot_omegas):
     real_cross = 2.0 * term_cross_A.real
 
     return 1/F_norm*(term_FF.real + term_XX.real + real_cross)
-
-@njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_PG_numba_coef(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX):
-    n_targets = len(targets)
-    n_snaps = len(snapshot_omegas)
-    C_list = np.zeros((len(targets), n_snaps), dtype=np.complex128)
-
-    for w in prange(n_targets):
-        omega_target = targets[w]
-        delta = snapshot_omegas - omega_target
-        b = np.zeros(n_snaps, dtype=np.complex128)
-        for i in range(n_snaps):
-            b[i] = FdF - (delta[i] * FdMX[i])
-        A = np.zeros((n_snaps, n_snaps), dtype=np.complex128)
-        for i in range(n_snaps):
-            d_conj_i = np.conj(delta[i])
-            for j in range(n_snaps):
-                val = FdF
-                val -= delta[i] * FdMX[i]
-                val += d_conj_i * delta[j] * XMMX[i, j]
-                val -= np.conj(delta[j]) * MXdF[j]
-                A[i, j] = val
-
-        C = np.linalg.solve(A, b)
-        C_list[w, :] = C.flatten()
-
-    return C_list

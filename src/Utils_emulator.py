@@ -1,19 +1,16 @@
 from numba import njit, prange
 import numpy as np
 
-@njit(parallel=True, fastmath=True, cache=True)
+@njit(inline='always',parallel=True, fastmath=True, cache=True)
 def _evaluate_G_numba(targets, snapshot_omegas, X, Y, F):
     n_targets = len(targets)
     n_snaps = len(snapshot_omegas)
     S = np.zeros(n_targets, dtype=np.float64)
 
-    overlap_X = np.sum(np.conj(F) * X, axis=1)
-    overlap_Y = np.sum(np.conj(F) * Y, axis=1)
-    overlap_weights = overlap_X + overlap_Y
-    D = (X + Y).conj() @ F
+    overlap_weights = np.sum(np.conj(F) * np.concatenate((X, Y), axis=1), axis=1)
+    D = overlap_weights.conj()
     M = X.conj() @ X.T - Y.conj() @ Y.T
 
-    b = -D.copy()
     for w in prange(n_targets):
         omega_target = targets[w]
         delta = snapshot_omegas - omega_target
@@ -34,30 +31,27 @@ def _evaluate_G_numba(targets, snapshot_omegas, X, Y, F):
             for i in range(n_snaps):
                 for j in range(n_snaps):
                     A[i, j] = -D[i] + M[i, j] * delta[j]
-
-            C = np.linalg.solve(A, b)
+            C = np.linalg.solve(A, -D)
             dot_val = 0.0 + 0.0j
             for k in range(n_snaps):
                 dot_val += C[k] * overlap_weights[k]
             S[w] = -2 * dot_val.imag / np.pi
     return S
 
-@njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F): #_evaluate_PG_numba(targets, snapshot_omegas, FdF, FdMX, MXdF, XMMX, overlap_weights):
-    diff_XY = X - Y
-    MXdF = np.conj(diff_XY) @ F
+@njit(inline='always',parallel=True, fastmath=True, cache=True) #DEBUG EMMA
+def _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F):
+    MXdF = np.concatenate((X.conj(), -Y.conj()), axis=1) @ F
     FdF = np.vdot(F, F)
     FdMX = np.conj(MXdF)
     XMMX = np.conj(X) @ X.T + np.conj(Y) @ Y.T
 
-    overlap_X = np.sum(np.conj(F) * X, axis=1)
-    overlap_Y = np.sum(np.conj(F) * Y, axis=1)
-    overlap_weights = overlap_X + overlap_Y
+    overlap_weights = np.sum(np.conj(F)*np.concatenate((X, Y), axis=1),axis=1)
 
     n_targets = len(targets)
     n_snaps = len(snapshot_omegas)
     S = np.zeros(n_targets, dtype=np.float64)
 
+    C_vals = np.zeros((n_targets, n_snaps), dtype=np.complex128)
     for w in prange(n_targets):
         omega_target = targets[w]
         delta = snapshot_omegas - omega_target
@@ -75,6 +69,7 @@ def _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F): #_evaluate_PG_numba(t
                 A[i, j] = val
 
         C = np.linalg.solve(A, b)
+        C_vals[w, :] = C
 
         dot_val = 0.0 + 0.0j
         for k in range(n_snaps):

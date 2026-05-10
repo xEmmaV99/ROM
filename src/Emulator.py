@@ -22,8 +22,7 @@ class Emulator:
             S = _evaluate_G_numba(targets, snapshot_omegas, X, Y, F)
 
         elif self.projection_method == "PG":
-            S = _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F)
-
+            S, _ = _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F)
 
         print("Elapsed emulation time: ", time.time() - start, " s")
         return targets, S
