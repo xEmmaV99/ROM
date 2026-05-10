@@ -2,7 +2,22 @@ from numba import njit, prange
 import numpy as np
 
 @njit(inline='always',parallel=True, fastmath=True, cache=True)
-def _evaluate_G_numba(targets, snapshot_omegas, X, Y, F):
+def _evaluate_G_numba(targets, snapshot_omegas, snaphot_matrix, F):
+    """
+    Evaluation of the Galerkin projected FAM equations.
+
+    Args:
+        targets: The target frequencies at which to evaluate the strength.
+        snapshot_omegas: snapshot frequencies corresponding to the ROM basis, (num_snapshots,).
+        snapshot_matrix: snapshot matrix mathcal(X) = [X, Y] of the ROM basis (num_snapshots, 2, num_entries).
+        F: F vector (num_entries,).
+
+    Returns:
+        S: The evaluated strength at the target frequencies (num_targets,).
+
+    """
+    X, Y = snaphot_matrix[:, 0, :], snaphot_matrix[:, 1, :]
+
     n_targets = len(targets)
     n_snaps = len(snapshot_omegas)
     S = np.zeros(n_targets, dtype=np.float64)
@@ -39,7 +54,22 @@ def _evaluate_G_numba(targets, snapshot_omegas, X, Y, F):
     return S
 
 @njit(inline='always',parallel=True, fastmath=True, cache=True) #DEBUG EMMA
-def _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F):
+def _evaluate_PG_numba(targets, snapshot_omegas, snapshot_matrix, F):
+    """
+    Evaluation of the Galerkin projected FAM equations.
+
+    Args:
+        targets: The target frequencies at which to evaluate the strength.
+        snapshot_omegas: snapshot frequencies corresponding to the ROM basis, (num_snapshots,).
+        snapshot_matrix: snapshot matrix mathcal(X) = [X, Y] of the ROM basis (num_snapshots, 2, num_entries).
+        F: F vector (num_entries,).
+
+    Returns:
+        S: The evaluated strength at the target frequencies (num_targets,).
+        C_vals: The coefficients C for each target frequency (num_targets, num_snapshots), used for calculating the error estimator (cost function) for greedy sampling
+    """
+    X, Y = snapshot_matrix[:, 0, :], snapshot_matrix[:, 1, :]
+
     MXdF = np.concatenate((X.conj(), -Y.conj()), axis=1) @ F
     FdF = np.vdot(F, F)
     FdMX = np.conj(MXdF)
@@ -77,4 +107,151 @@ def _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F):
 
         S[w] = -2 * dot_val.imag / np.pi
 
+    return S, C_vals
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _evaluate_G_SVD_numba(targets, snapshot_ML, snapshot_matrices, U, F):
+    """
+    Evaluation of the Galerkin projected FAM equations including the SVD.
+
+    Args:
+        targets: The target frequencies at which to evaluate the strength.
+        snapshot_ML: precalculated transformed matrix (see expression in the thesis for details)
+        snapshot_matrices: snapshot matrix mathcal(X) = [X, Y] of the ROM basis (num_snapshots, 2, num_entries).
+        U: U matrix from the SVD of the snapshot matrix (num_snaps, num_modes).
+        F: F vector (num_entries,).
+
+    Returns:
+        S: The evaluated strength at the target frequencies (num_targets,).
+    """
+
+    num_targets = len(targets)
+
+    X = np.ascontiguousarray(snapshot_matrices[:, 0, :])
+    Y = np.ascontiguousarray(snapshot_matrices[:, 1, :])
+    X_ML = np.ascontiguousarray(snapshot_ML[:, 0, :])
+    Y_ML = np.ascontiguousarray(snapshot_ML[:, 1, :])
+
+    F_vec = F.ravel()
+    D =  np.sum(F_vec*np.concatenate((np.conj(X), np.conj(Y)), axis=1),axis=1)
+    overlap_weights = np.conj(D)
+
+    M = (np.conj(X) @ X.T) - (np.conj(Y) @ Y.T)
+    ML = (np.conj(X) @ X_ML.T) - (np.conj(Y) @ Y_ML.T)
+
+    U_h = np.conj(U).T
+    U_sum = np.zeros(U_h.shape[0], dtype=np.complex128)
+    for r in range(U_h.shape[0]):
+        for c in range(U_h.shape[1]):
+            U_sum[r] += U_h[r, c]
+
+    S = np.zeros(num_targets, dtype=np.float64)
+
+    for w in prange(num_targets):
+        omega_target = targets[w]
+        A = (ML - omega_target * M) - np.outer(D, U_sum)
+        b = -D
+        C = np.linalg.solve(A, b)
+        dot_val = np.dot(C, overlap_weights)
+        S[w] = -2 * dot_val.imag / np.pi
+
     return S
+
+@njit(parallel=True, fastmath=True, cache=True)
+def _evaluate_PG_SVD_numba(targets, snapshot_omegas_orig, snapshot_matrices_orig, snapshot_matrices, U, F):
+    """
+    Evaluation of the Petrov-Galerkin projected FAM equations including the SVD.
+
+    Args:
+        targets: The target frequencies at which to evaluate the strength.
+        snapshot_omegas_orig:  snapshot frequencies corresponding to the ROM basis, (num_snapshots,).
+        snapshot_matrices_orig: snapshot matrix mathcal(X) = [X, Y] of the ROM basis (num_snapshots, 2, num_entries).
+        snapshot_matrices: transformed/truncated snapshot matrix
+        U: U matrix from the SVD of the snapshot matrix (num_snaps, num_modes).
+        F: F vector (num_entries,).
+
+    Returns:
+        S: The evaluated strength at the target frequencies (num_targets,).
+        C_SVD: The coefficients C for each target frequency (num_targets, num_modes), used for calculating the error estimator (cost function) for greedy sampling
+    """
+    Ns = U.shape[0]
+    Nr = U.shape[1]
+    n_targets = len(targets)
+
+    F= F.ravel()
+    X = np.ascontiguousarray(snapshot_matrices_orig[:, 0, :])
+    Y = np.ascontiguousarray(snapshot_matrices_orig[:, 1, :])
+
+    XMMX = np.dot(np.conj(X), X.T) + np.dot(np.conj(Y), Y.T)
+    FdF = np.vdot(F, F).real
+    MXdF = np.concatenate((np.conj(X), -np.conj(Y)), axis=1) @ F
+    MXdF_conj = np.conj(MXdF)
+
+    Xu = np.ascontiguousarray(snapshot_matrices[:, 0, :])
+    Yu = np.ascontiguousarray(snapshot_matrices[:, 1, :])
+    overlap_weights = np.sum(np.conj(F)*np.concatenate((Xu, Yu), axis=1),axis=1)
+
+    SumU = np.sum(U, axis=0)
+    SumU_conj = np.conj(SumU)
+
+    Ud = np.ascontiguousarray(np.conj(U).T)
+    O = snapshot_omegas_orig
+    O_conj = np.conj(O)
+
+    inner_v0 = O * MXdF_conj
+    v2_0 = np.dot(Ud, inner_v0)
+    v2_1 = np.dot(Ud, MXdF_conj)
+
+    b0 = FdF * SumU_conj - v2_0
+    b1 = v2_1
+
+    temp_P0 = np.empty((Ns, Ns), dtype=np.complex128)
+    for i in range(Ns):
+        for j in range(Ns):
+            temp_P0[i, j] = XMMX[i, j] * O_conj[i] * O[j]
+    P0 = np.dot(Ud, np.dot(temp_P0, U))
+
+    temp_P1 = np.empty((Ns, Ns), dtype=np.complex128)
+    for i in range(Ns):
+        for j in range(Ns):
+            temp_P1[i, j] = XMMX[i, j] * O_conj[i]
+    P1 = np.dot(Ud, np.dot(temp_P1, U))
+
+    P3 = np.dot(Ud, np.dot(XMMX, U))
+
+    A0 = np.zeros((Nr, Nr), dtype=np.complex128)
+    A_w = np.zeros((Nr, Nr), dtype=np.complex128)
+
+    for i in range(Nr):
+        si_c = SumU_conj[i]
+        v0_i = v2_0[i]
+        v1_i = v2_1[i]
+        for j in range(Nr):
+            # A0 logic
+            A0[i, j] = P0[i, j] + FdF * si_c * SumU[j] - v0_i * SumU[j] - si_c * np.conj(v2_0[j])
+            # A_w logic
+            A_w[i, j] = -P1[i, j] + v1_i * SumU[j]
+
+    A0 = 0.5 * (A0 + np.conj(A0.T))
+    P3 = 0.5 * (P3 + np.conj(P3.T))
+
+    A_w_conj_T = np.ascontiguousarray(np.conj(A_w.T))
+
+    S = np.zeros(n_targets, dtype=np.float64)
+    C_SVD = np.zeros((n_targets, Nr), dtype=np.complex128)
+
+    for w in prange(n_targets):
+        wt = targets[w]
+        wt_c = np.conj(wt)
+        wt_abs_sq = (wt * wt_c).real
+
+        b_PG = b0 + wt * b1
+        A_PG = A0 + (wt * A_w) + (wt_c * A_w_conj_T) + (wt_abs_sq * P3)
+
+        c = np.linalg.solve(A_PG, b_PG)
+        C_SVD[w, :] = c
+
+        dot_val = np.dot(c, overlap_weights)
+        S[w] = -2.0 * dot_val.imag / np.pi
+
+    return S, C_SVD

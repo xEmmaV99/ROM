@@ -4,6 +4,21 @@ from numba import njit, prange
 
 @njit(fastmath=True, cache=True)
 def cost_numba(omega, alpha, FdF, MXdF, XMMX, F_norm, snapshot_omegas):
+    """
+    Computes the cost function for the given parameters.
+
+    Args:
+        omega: frequency at which to evaluate the cost function
+        alpha: solution vector of the linear system ( A alpha = b ) evaluated at the frequency omega
+        FdF: precomputed scalar value representing the inner product of F and F^dagger
+        MXdF: precomputed vector representing (M X)^dagger F
+        XMMX: precomputed vector representing (MX)^dagger (MX)
+        F_norm: scaling factor for the cost function, typically the norm of F
+        snapshot_omegas: vector of frequencies corresponding to the snapshots used in the ROM basis
+
+    Returns:
+        The computed cost function value for omega.
+    """
     alpha_flat = alpha.ravel()
     MXdF_flat = MXdF.ravel()
     n = len(alpha_flat)
