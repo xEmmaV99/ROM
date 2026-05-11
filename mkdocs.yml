@@ -1,7 +1,7 @@
 site_name: ROM FAMQRPA emulator Documentation
 
 theme:
-  name: material  # read_the_docs
+  name: readthedocs  # read_the_docs
 
 plugins:
   - search

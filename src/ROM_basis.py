@@ -242,7 +242,7 @@ class ROM_builder:
 
         self.max_num_snapshots = 5
         self.build_type = 'equidistant_1D'
-        self.path_to_meanfield_wf = convert_to_linux(path_to_meanfield_wf)
+        self.path_to_meanfield_wf = _convert_to_linux(path_to_meanfield_wf)
 
         self.basis = ROM_basis() # to be loaded!!
         self.basis.load = self.load # overwrite function to have the same function but ALSO save path
@@ -383,7 +383,7 @@ xyfile="../$logdir_name/xy.$protons.$neutrons.$nwn.$nwp.$l.$m.$param.$size.xy$OU
 exe="Tantalus.$pref.exe"              # full name of the mean-field executable
 exefam="fam.$pref.exe"                # full name of the fam executable
 param="$param"                         # name of the parameterization
-workdir="{convert_to_linux(str(self.working_directory))}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
+workdir="{_convert_to_linux(str(self.working_directory))}/work.$protons.$neutrons.$size.$nwn.$nwp$OUT"
 
 if [ ! -d "$workdir/" ]; then
   mkdir "$workdir"
@@ -727,7 +727,7 @@ fam_check=$?
         except FileNotFoundError:
             raise FileNotFoundError(f"Could not find snapshot {path_to_snapshot}.")
 
-def convert_to_linux(path: str) -> str:
+def _convert_to_linux(path: str) -> str:
     """
     Helper function to convert Windows paths to Linux paths for WSL compatibility. If the path is already in Linux format, it is returned unchanged.
 

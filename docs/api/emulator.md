@@ -1,3 +1,3 @@
-# Emulator Documentation
+# Emulator documentation
 
 ::: src.Emulator
