@@ -21,6 +21,8 @@ ROM/
 │   ├── Utils_emulator.py
 │   └── Utils_parsers.py
 ├── .gitignore
+├── mkdocs.yml
+├── requirements.txt
 └──  README.md
 ```
 As suggested by the ```example_scripts```, there are two ways (online and offline) of using this repo. The online stage is emulator creation while the offline stage is emulator usage. 
