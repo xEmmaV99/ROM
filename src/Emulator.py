@@ -1,5 +1,5 @@
 import numpy as np
-from src.Utils_emulator import _evaluate_G_numba, _evaluate_PG_numba
+from src.Utils_emulator import _evaluate_G_numba, _evaluate_PG_numba, _evaluate_G_SVD_numba, _evaluate_PG_SVD_numba
 from src.ROM_basis import ROM_basis
 
 class Emulator:
@@ -21,12 +21,14 @@ class Emulator:
         self.basis = basis # ROM_basis object
         self.projection_method = "PG" # or "G"
 
-    def evaluate(self, targets):
+
+    def evaluate(self, targets, svd=False):
         """
         Evaluate the emulator at the given target parameters.
 
         Args:
             targets: A list of frequencies at which to evaluate the emulator.
+            svd: A boolean indicating whether to use Singular Value Decomposition (SVD) for the projection. Default is False.
 
         Returns:
             (targets, S): A tuple containing the input targets and the corresponding emulated strength.
@@ -34,15 +36,21 @@ class Emulator:
 
         S = np.zeros(len(targets))
 
-        X = self.basis.snapshots[:, 0, :]
-        Y = self.basis.snapshots[:, 1, :]
         snapshot_omegas = self.basis.omegas
         F = self.basis.F
+        if not svd:
+            if self.projection_method == "G":
+                S = _evaluate_G_numba(targets, snapshot_omegas, self.basis.snapshots, F)
 
-        if self.projection_method == "G":
-            S = _evaluate_G_numba(targets, snapshot_omegas, X, Y, F)
-
-        elif self.projection_method == "PG":
-            S, _ = _evaluate_PG_numba(targets, snapshot_omegas, X, Y, F)
+            elif self.projection_method == "PG":
+                S, _ = _evaluate_PG_numba(targets, snapshot_omegas, self.basis.snapshots, F)
+        else:
+            self.basis.compute_SVD() # computes SVD decomp, or nothing if already computed
+            if self.projection_method=="G":
+                S = _evaluate_G_SVD_numba(targets, self.basis._svd_snapshot_ML, self.basis._svd_transformed_snapshots,
+                                          self.basis.U, self.basis.F)
+            elif self.projection_method == "PG":
+                S, _ = _evaluate_PG_SVD_numba(targets, self.basis.omegas, self.basis.snapshots,
+                                           self.basis._svd_transformed_snapshots, self.basis.U, self.basis.F)
 
         return targets, S

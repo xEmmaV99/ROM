@@ -109,44 +109,44 @@ def _evaluate_PG_numba(targets, snapshot_omegas, snapshot_matrix, F):
 
     return S, C_vals
 
+
 @njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_G_SVD_numba(targets, snapshot_ML, snapshot_matrices, U, F):
+def _evaluate_G_SVD_numba(targets, snapshot_ML, transformed_snapshots, U, F):
     """
     Evaluation of the Galerkin projected FAM equations including the SVD.
 
     Args:
         targets: The target frequencies at which to evaluate the strength.
         snapshot_ML: precalculated transformed matrix (see expression in the thesis for details)
-        snapshot_matrices: snapshot matrix mathcal(X) = [X, Y] of the ROM basis (num_snapshots, 2, num_entries).
+        transformed_snapshots: transformed snapshot matrix of the ROM basis
         U: U matrix from the SVD of the snapshot matrix (num_snaps, num_modes).
         F: F vector (num_entries,).
 
     Returns:
         S: The evaluated strength at the target frequencies (num_targets,).
     """
-
     num_targets = len(targets)
 
-    X = np.ascontiguousarray(snapshot_matrices[:, 0, :])
-    Y = np.ascontiguousarray(snapshot_matrices[:, 1, :])
+    X = np.ascontiguousarray(transformed_snapshots[:, 0, :])
+    Y = np.ascontiguousarray(transformed_snapshots[:, 1, :])
     X_ML = np.ascontiguousarray(snapshot_ML[:, 0, :])
     Y_ML = np.ascontiguousarray(snapshot_ML[:, 1, :])
 
     F_vec = F.ravel()
-    D =  np.sum(F_vec*np.concatenate((np.conj(X), np.conj(Y)), axis=1),axis=1)
+    D = np.sum(F_vec * np.concatenate((np.conj(X), np.conj(Y)), axis=1), axis=1)
     overlap_weights = np.conj(D)
 
     M = (np.conj(X) @ X.T) - (np.conj(Y) @ Y.T)
     ML = (np.conj(X) @ X_ML.T) - (np.conj(Y) @ Y_ML.T)
 
-    U_h = np.conj(U).T
-    U_sum = np.zeros(U_h.shape[0], dtype=np.complex128)
-    for r in range(U_h.shape[0]):
-        for c in range(U_h.shape[1]):
-            U_sum[r] += U_h[r, c]
+    num_modes = U.shape[1]
+    num_snaps = U.shape[0]
+    U_sum = np.zeros(num_modes, dtype=np.complex128)
+    for i in range(num_modes):
+        for l in range(num_snaps):
+            U_sum[i] += U[l, i]
 
     S = np.zeros(num_targets, dtype=np.float64)
-
     for w in prange(num_targets):
         omega_target = targets[w]
         A = (ML - omega_target * M) - np.outer(D, U_sum)
@@ -156,6 +156,7 @@ def _evaluate_G_SVD_numba(targets, snapshot_ML, snapshot_matrices, U, F):
         S[w] = -2 * dot_val.imag / np.pi
 
     return S
+
 
 @njit(parallel=True, fastmath=True, cache=True)
 def _evaluate_PG_SVD_numba(targets, snapshot_omegas_orig, snapshot_matrices_orig, snapshot_matrices, U, F):
@@ -227,9 +228,7 @@ def _evaluate_PG_SVD_numba(targets, snapshot_omegas_orig, snapshot_matrices_orig
         v0_i = v2_0[i]
         v1_i = v2_1[i]
         for j in range(Nr):
-            # A0 logic
             A0[i, j] = P0[i, j] + FdF * si_c * SumU[j] - v0_i * SumU[j] - si_c * np.conj(v2_0[j])
-            # A_w logic
             A_w[i, j] = -P1[i, j] + v1_i * SumU[j]
 
     A0 = 0.5 * (A0 + np.conj(A0.T))

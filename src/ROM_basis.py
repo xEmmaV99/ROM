@@ -24,6 +24,7 @@ class ROM_basis:
         omegas: The frequencies (omegas) at which the snapshots were taken, a 1D array (num_snapshots,) of complex values.
         snapshots: The snapshot data, typically a 3D array (num_snapshots, 2, entries), first dimension refers to the snapshot frequency, second dimension is for X and Y and the third dimension contains the matrix elements.
         F: The F vector associated with the snapshots (stacked F20, F02)
+        U: SVD transformation vector
     """
     def __init__(self):
         """
@@ -32,6 +33,7 @@ class ROM_basis:
         self.omegas = None
         self.snapshots = None # todo consider merging omegas and snapshots together ?
         self.F = None
+        self.U = None
 
     def is_loaded(self):
         return self.omegas is not None and self.snapshots is not None
@@ -48,6 +50,62 @@ class ROM_basis:
         # load snapshots and omegas from file
         self.snapshots, self.omegas, self.F = parse_XY_numba(path_to_snapshot)
         return self
+
+    def compute_SVD(self, cutoff=0.001, force_calc=False):
+        """
+            Computes the Singular Value Decomposition (SVD) of the snapshot data
+
+        Args:
+            cutoff: the cutoff threshold for singular values (relative to the largest one)
+            force_calc: if True, always re-calculate the SVD
+        """
+        if self.U is None or force_calc:
+            nx, ny, nz = self.snapshots.shape
+            X_flat = self.snapshots.reshape(nx, ny * nz).T
+            U, S, Vh = np.linalg.svd(X_flat, full_matrices=False)  # full_matrices false when not square
+            U_snap = Vh.T @ np.diag(1 / S)
+            self.U = U_snap[:,  S / S[0] > cutoff]
+            ### precalc for projection
+            # PG
+            self._svd_transformed_snapshots = np.einsum('ji,jkl->ikl', self.U, self.snapshots)
+            # G
+            self._svd_snapshot_ML = np.einsum('l,lab,lk->kab', self.omegas, self.snapshots, self.U)
+
+    def expand_by_symmetry(self, which="all"):
+        """
+        Adding snapshots related by symmetry
+        X(-w) = Y(w) and Y(-w) = X(w) symmetry
+        X(w*) = X*(w) and Y(w*) = Y*(w) symmetry
+        X(-w*) = Y*(w) and Y(-w*) = X*(w) symmetry
+
+        Args:
+            which: string specifying which symmmetires to add (default "" adds all, "pm" adds +/- omega symmetry, "cc" adds complex conjugation symmetry)
+
+        """
+        if which == "all" or which == "pm":
+            print(self.omegas.shape)
+            omega = np.concatenate((self.omegas, -self.omegas))
+
+            tmp = np.zeros_like(self.snapshots)
+            tmp[:, 0, :] = self.snapshots[:, 1, :]  # X(-w) = Y(w)
+            tmp[:, 1, :] = self.snapshots[:, 0, :]  # Y(-w) = X(w)
+            snapshots = np.stack((self.snapshots, tmp)).reshape((-1, self.snapshots.shape[1], self.snapshots.shape[2]))
+
+            self.omegas = omega # update here so we also include it in the next step if required
+            self.snapshots = snapshots
+
+        #X(w*) = X(w).conj() and Y(w*) = Y(w).conj()  symmetry
+        if which == "all" or which == "cc":
+            print("Adding free snapshots for cc omega symmetry")
+            omega = np.concatenate(
+                (self.omegas, self.omegas.conj()))  # This also includes the last one since i am conjugating omega-new
+            tmp = np.zeros_like(self.snapshots)
+            tmp[:, 0, :] = self.snapshots[:, 0, :].conj()
+            tmp[:, 1, :] = self.snapshots[:, 1, :].conj()
+            snapshots = np.stack((self.snapshots, tmp)).reshape((-1, self.snapshots.shape[1], self.snapshots.shape[2]))
+
+        self.snapshots = snapshots
+        self.omegas = omega
 
 class data:
     """
@@ -481,7 +539,6 @@ fam_check=$?
             # iterative basis creation
             W_scan = np.linspace(d.w_min, d.w_max, num=2000) + d.smear * 1.j
             if not self.basis.is_loaded():
-                initial_vectors = 2
                 # choose two snapshots, say at 0.25 and 0.75 from the spectrum
                 w1 = 0.25*(d.w_max - d.w_min) + d.smear * 1.j
                 w2 = 0.75*(d.w_max - d.w_min) + d.smear * 1.j
@@ -519,7 +576,7 @@ fam_check=$?
                 MXdF = np.concatenate((X.conj(), -Y.conj()), axis=1) @ F
                 XMMX = X.conj() @ X.T + Y.conj() @ Y.T
 
-                _, alphas = _evaluate_PG_numba(W_scan, snapshot_omegas, X, Y, F)
+                _, alphas = _evaluate_PG_numba(W_scan, snapshot_omegas, snapshots, F)
 
                 for idx in prange(len(W_scan)):
                     omega_test = W_scan[idx]
@@ -593,7 +650,7 @@ fam_check=$?
                 MXdF = np.concatenate((X.conj(), -Y.conj()), axis=1) @ F
                 XMMX = X.conj() @ X.T + Y.conj() @ Y.T
 
-                _, alphas = _evaluate_PG_numba(W_scan, snapshot_omegas, X, Y, F)
+                _, alphas = _evaluate_PG_numba(W_scan, snapshot_omegas, snapshots, F)
 
                 for idx in prange(len(W_scan)):
                     omega_test = W_scan[idx]
@@ -609,7 +666,7 @@ fam_check=$?
                 # now, scan this omega value along the complex axis, and find the "sub"-optimal omega value
                 H_scan = np.real(W_scan[max_cost_idx]) + np.linspace(1, self.greedy_2D_settings["max_smearing"],200)*1j*d.smear
                 COSTS_H = np.zeros(len(H_scan))
-                _, alphas = _evaluate_PG_numba(H_scan, snapshot_omegas, X, Y, F)
+                _, alphas = _evaluate_PG_numba(H_scan, snapshot_omegas, snapshots, F)
                 for idx in prange(len(H_scan)):
                     omega_test = H_scan[idx]
                     alpha = alphas[idx]

@@ -19,13 +19,28 @@ basis.load(path_to_snapshot=path_to_snapshot)
 emul = Emulator(basis=basis)
 
 smear = 1.0
-targets = np.linspace(5,40,2000)+smear*1j # example target frequencies
-emul.projection_method = "G"  # or "PG"
+targets = np.linspace(-40,40,2000)+smear*1j # example target frequencies
+emul.projection_method = "PG"  # or "PG"
+
 x,y = emul.evaluate(targets=targets)
 
 plt.figure()
 plt.plot(x.real, y)
 
-x, y = emul.evaluate(targets=basis.omegas)
-plt.scatter(x.real, y, marker='x')
+# now also apply the svd decomp:
+x, y = emul.evaluate(targets=targets, svd=True)
+
+plt.plot(x.real, y, label='SVD')
+
+# now also add symmetries
+emul.basis.expand_by_symmetry(which="all")
+# need to recompute the SVD because the snapshot matrix has changed
+emul.basis.compute_SVD(force_calc=True, cutoff=0.001)
+
+x,y = emul.evaluate(targets=targets, svd=True)
+plt.plot(x.real, y, label='symmetry expanded')
+
+
+plt.legend()
+
 plt.show()
