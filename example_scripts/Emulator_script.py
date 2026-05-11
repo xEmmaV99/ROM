@@ -20,7 +20,7 @@ emul = Emulator(basis=basis)
 
 smear = 1.0
 targets = np.linspace(-40,40,2000)+smear*1j # example target frequencies
-emul.projection_method = "PG"  # or "PG"
+emul.projection_method = "G"  # or "PG"
 
 x,y = emul.evaluate(targets=targets)
 

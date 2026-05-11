@@ -2,7 +2,7 @@ from numba import njit, prange
 import numpy as np
 
 @njit(inline='always',parallel=True, fastmath=True, cache=True)
-def _evaluate_G_numba(targets, snapshot_omegas, snaphot_matrix, F):
+def evaluate_G_numba(targets, snapshot_omegas, snaphot_matrix, F):
     """
     Evaluation of the Galerkin projected FAM equations.
 
@@ -54,7 +54,7 @@ def _evaluate_G_numba(targets, snapshot_omegas, snaphot_matrix, F):
     return S
 
 @njit(inline='always',parallel=True, fastmath=True, cache=True) #DEBUG EMMA
-def _evaluate_PG_numba(targets, snapshot_omegas, snapshot_matrix, F):
+def evaluate_PG_numba(targets, snapshot_omegas, snapshot_matrix, F):
     """
     Evaluation of the Galerkin projected FAM equations.
 
@@ -111,7 +111,7 @@ def _evaluate_PG_numba(targets, snapshot_omegas, snapshot_matrix, F):
 
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_G_SVD_numba(targets, snapshot_ML, transformed_snapshots, U, F):
+def evaluate_G_SVD_numba(targets, snapshot_ML, transformed_snapshots, U, F):
     """
     Evaluation of the Galerkin projected FAM equations including the SVD.
 
@@ -159,7 +159,7 @@ def _evaluate_G_SVD_numba(targets, snapshot_ML, transformed_snapshots, U, F):
 
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _evaluate_PG_SVD_numba(targets, snapshot_omegas_orig, snapshot_matrices_orig, snapshot_matrices, U, F):
+def evaluate_PG_SVD_numba(targets, snapshot_omegas_orig, snapshot_matrices_orig, snapshot_matrices, U, F):
     """
     Evaluation of the Petrov-Galerkin projected FAM equations including the SVD.
 

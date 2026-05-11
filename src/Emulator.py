@@ -1,5 +1,5 @@
 import numpy as np
-from src.Utils_emulator import _evaluate_G_numba, _evaluate_PG_numba, _evaluate_G_SVD_numba, _evaluate_PG_SVD_numba
+from src.Utils_emulator import evaluate_G_numba, evaluate_PG_numba, evaluate_G_SVD_numba, evaluate_PG_SVD_numba
 from src.ROM_basis import ROM_basis
 
 class Emulator:
@@ -40,17 +40,17 @@ class Emulator:
         F = self.basis.F
         if not svd:
             if self.projection_method == "G":
-                S = _evaluate_G_numba(targets, snapshot_omegas, self.basis.snapshots, F)
+                S = evaluate_G_numba(targets, snapshot_omegas, self.basis.snapshots, F)
 
             elif self.projection_method == "PG":
-                S, _ = _evaluate_PG_numba(targets, snapshot_omegas, self.basis.snapshots, F)
+                S, _ = evaluate_PG_numba(targets, snapshot_omegas, self.basis.snapshots, F)
         else:
             self.basis.compute_SVD() # computes SVD decomp, or nothing if already computed
             if self.projection_method=="G":
-                S = _evaluate_G_SVD_numba(targets, self.basis._svd_snapshot_ML, self.basis._svd_transformed_snapshots,
-                                          self.basis.U, self.basis.F)
+                S = evaluate_G_SVD_numba(targets, self.basis._svd_snapshot_ML, self.basis._svd_transformed_snapshots,
+                                         self.basis.U, self.basis.F)
             elif self.projection_method == "PG":
-                S, _ = _evaluate_PG_SVD_numba(targets, self.basis.omegas, self.basis.snapshots,
-                                           self.basis._svd_transformed_snapshots, self.basis.U, self.basis.F)
+                S, _ = evaluate_PG_SVD_numba(targets, self.basis.omegas, self.basis.snapshots,
+                                             self.basis._svd_transformed_snapshots, self.basis.U, self.basis.F)
 
         return targets, S

@@ -8,7 +8,7 @@ import numpy as np
 try:
     from functools import cached_property
     from src.Utils_basis import cost_numba
-    from src.Utils_emulator import _evaluate_PG_numba
+    from src.Utils_emulator import evaluate_PG_numba
     from src.Utils_parsers import parse_XY_numba, combine_FAM_output
     from numba import prange
 except ImportError:
@@ -24,7 +24,7 @@ class ROM_basis:
         omegas: The frequencies (omegas) at which the snapshots were taken, a 1D array (num_snapshots,) of complex values.
         snapshots: The snapshot data, typically a 3D array (num_snapshots, 2, entries), first dimension refers to the snapshot frequency, second dimension is for X and Y and the third dimension contains the matrix elements.
         F: The F vector associated with the snapshots (stacked F20, F02)
-        U: SVD transformation vector
+        U: SVD transformation matrix
     """
     def __init__(self):
         """
@@ -576,7 +576,7 @@ fam_check=$?
                 MXdF = np.concatenate((X.conj(), -Y.conj()), axis=1) @ F
                 XMMX = X.conj() @ X.T + Y.conj() @ Y.T
 
-                _, alphas = _evaluate_PG_numba(W_scan, snapshot_omegas, snapshots, F)
+                _, alphas = evaluate_PG_numba(W_scan, snapshot_omegas, snapshots, F)
 
                 for idx in prange(len(W_scan)):
                     omega_test = W_scan[idx]
@@ -650,7 +650,7 @@ fam_check=$?
                 MXdF = np.concatenate((X.conj(), -Y.conj()), axis=1) @ F
                 XMMX = X.conj() @ X.T + Y.conj() @ Y.T
 
-                _, alphas = _evaluate_PG_numba(W_scan, snapshot_omegas, snapshots, F)
+                _, alphas = evaluate_PG_numba(W_scan, snapshot_omegas, snapshots, F)
 
                 for idx in prange(len(W_scan)):
                     omega_test = W_scan[idx]
@@ -666,7 +666,7 @@ fam_check=$?
                 # now, scan this omega value along the complex axis, and find the "sub"-optimal omega value
                 H_scan = np.real(W_scan[max_cost_idx]) + np.linspace(1, self.greedy_2D_settings["max_smearing"],200)*1j*d.smear
                 COSTS_H = np.zeros(len(H_scan))
-                _, alphas = _evaluate_PG_numba(H_scan, snapshot_omegas, snapshots, F)
+                _, alphas = evaluate_PG_numba(H_scan, snapshot_omegas, snapshots, F)
                 for idx in prange(len(H_scan)):
                     omega_test = H_scan[idx]
                     alpha = alphas[idx]
