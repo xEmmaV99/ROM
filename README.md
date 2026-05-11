@@ -8,6 +8,8 @@ This repository can be used to create an emulator for QRPA linear response. The 
 ROM/
 ├── _inputs/
 ├── _outputs/
+├── _scripts/
+├── _docs/
 ├── example_scripts/
 │   ├── create_snapshots.py
 │   └── load_snapshots.py
@@ -15,11 +17,15 @@ ROM/
 │   ├── __init__.py
 │   ├── Emulator.py
 │   ├── ROM_basis.py
-│   └── Utils.py
+│   ├── Utils_basis.py
+│   ├── Utils_emulator.py
+│   └── Utils_parsers.py
 ├── .gitignore
+├── mkdocs.yml
+├── requirements.txt
 └──  README.md
 ```
-As suggested by the ```example_scripts```, there are two ways (online and offline) of using this repo. The online stage is emulator creation while the offline stage is emulator usage.
+As suggested by the ```example_scripts```, there are two ways (online and offline) of using this repo. The online stage is emulator creation while the offline stage is emulator usage. 
 
 ### Online: Emulator Creation
 #### Required: mean-field solution and mean-field output in ```_input```, tantalus installation
@@ -36,10 +42,4 @@ In case the ```build_type == 'greedy'```, one can load previous runs using ```ro
 In order to set up the emulator, one has to load a basis with ```basis = ROM_basis()```,  ```basis.load(path)``` and then calling ``` emulator = Emulator(basis)```. The projection method is specified using the ```emulator.projection_method``` field. 
 
 To apply the emulator to target values, simply use ```emulator.evaluate(target_values)```.
-
-
-
-# Extra notes also for myself
-Running on linux/remote: make sure to load the venv using ```source /path/to/venv/bin/activate```
-Then run a script using ```python -m example_scripts.script``` to make sure that the source code is loaded
 
