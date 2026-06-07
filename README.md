@@ -1,7 +1,6 @@
+#### This repository is still under development
 
-
-This repository can be used to create an emulator for QRPA linear response. The emulator applies reduced order modelling to extrapolate from previous FAM output. 
-
+This repository can be used to create an emulator for QRPA linear response. The emulator applies reduced order modelling to approxmate from previous FAM amplitudes. 
 
  The repository is structured as follows:
 ```text
