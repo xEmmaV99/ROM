@@ -10,18 +10,21 @@ plugins:
         python:
           paths: ["."]
           options:
-            show_root_heading: true
-            show_source: true
             members_order: alphabetical
+            docstring_section_style: table
+            docstring_style: google
+            show_root_heading: false
 
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
   - Home: index.md
   - About: about.md
   - Source Code:
-      - Emulator: api/emulator.md
-      - ROM Basis: api/rom_basis.md
-      - Utils Parser: api/utils_parser.md
-      - Utils Emulator: api/utils_emulator.md
-      - Utils ROM Basis: api/utils_rom_basis.md
-      # Add others as needed
+      - Basis Class : rom_basis.md
+      - Utils : utils_rom_basis.md

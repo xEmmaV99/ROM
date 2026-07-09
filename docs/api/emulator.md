@@ -1,3 +1,0 @@
-# Emulator documentation
-
-::: src.Emulator

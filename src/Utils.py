@@ -71,7 +71,7 @@ def evaluate_G_numba(targets, snapshot_omegas, snapshot_matrix, F):
 
     n_targets = len(targets)
     n_snaps = len(snapshot_omegas)
-    S = np.zeros(n_targets, dtype=np.float64)
+    S = np.zeros(n_targets, dtype=np.complex128)
 
     overlap_weights = np.sum(np.conj(F) * np.concatenate((X, Y), axis=1), axis=1)
     D = overlap_weights.conj()
@@ -131,7 +131,7 @@ def evaluate_PG_numba(targets, snapshot_omegas, snapshot_matrix, F):
 
     n_targets = len(targets)
     n_snaps = len(snapshot_omegas)
-    S = np.zeros(n_targets, dtype=np.float64)
+    S = np.zeros(n_targets, dtype=np.complex128)
 
     C_vals = np.zeros((n_targets, n_snaps), dtype=np.complex128)
     for w in prange(n_targets):
@@ -199,7 +199,7 @@ def evaluate_G_SVD_numba(targets, snapshot_ML, transformed_snapshots, U, F):
         for l in range(num_snaps):
             U_sum[i] += U[l, i]
 
-    S = np.zeros(num_targets, dtype=np.float64)
+    S = np.zeros(num_targets, dtype=np.complex128)
     for w in prange(num_targets):
         omega_target = targets[w]
         A = (ML - omega_target * M) - np.outer(D, U_sum)
@@ -290,7 +290,7 @@ def evaluate_PG_SVD_numba(targets, snapshot_omegas_orig, snapshot_matrices_orig,
 
     A_w_conj_T = np.ascontiguousarray(np.conj(A_w.T))
 
-    S = np.zeros(n_targets, dtype=np.float64)
+    S = np.zeros(n_targets, dtype=np.complex128)
     C_SVD = np.zeros((n_targets, Nr), dtype=np.complex128)
 
     for w in prange(n_targets):

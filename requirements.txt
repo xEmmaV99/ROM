@@ -5,3 +5,4 @@ pandas>=3.0.1
 scipy>=1.17.0
 pytest>=7.4.4
 mkdocs
+mkdocstrings[python]

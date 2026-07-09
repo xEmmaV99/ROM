@@ -5,20 +5,37 @@ try:
 except ImportError:
     print("Numba not installed.")
 
-
 class ROM_basis:
-    """
-    Class to represent the ROM_basis
+    r"""
+    Class to represent the ROM basis.
 
     Attributes:
-        omegas: The frequencies (omegas) at which the snapshots were taken, a 1D array (num_snapshots,) of complex values.
-        snapshots: The snapshot data, typically a 3D array (num_snapshots, 2, entries), first dimension refers to the snapshot frequency, second dimension is for X and Y and the third dimension contains the matrix elements.
-        F: The F vector associated with the snapshots (stacked F20, F02)
-        U: SVD transformation matrix
+        omegas (np.ndarray): The $n_s$ frequencies $\omega$ at which the snapshots were taken, a 1D array with size $(n_s)$ of complex values.
+        snapshots (np.ndarray): The snapshot data $\mathcal{X}$, typically a 3D array $(n_s, 2, m)$, first dimension refers to the snapshot frequencies, second dimension is for $X$ (0) and $Y$ (1) and the third dimension contains the $m$ matrix elements.
+        F (np.ndarray): The $\mathcal{F}$ vector associated with the snapshots, shape $(2n_s)$, by stacking $F^{20}$ and $F^{02}$
+        U (np.ndarray): SVD transformation matrix
+        settings (dict): Dictionary containing settings for the ROM basis, including
+
+         - convergence criterion used in the greedy algorithm,
+         - threshold used for greedy-2D,
+         - smearing of the output spectrum,
+         - max smearing of the 2D greedy search space,
+         - w_max and w_min to define the real part of the search space.
+        build_type (str): The type of basis building method to use, either 'greedy' or 'greedy_2D'.
+        projection_method (str): The method to use for projection, either 'PG' or 'G'
+
     """
+
+
     def __init__(self):
-        """
+        r"""
         Initialise the ROM_basis with empty attributes. The actual data will be loaded using the load method.
+
+        Example:
+        ```python
+            basis = ROM_basis()
+        ```
+
         """
         self.omegas = None
         self.snapshots = None
@@ -36,29 +53,40 @@ class ROM_basis:
         self.build_type = 'greedy'
         self.projection_method = "PG"
 
-    def is_loaded(self):
+
+    def is_loaded(self) -> bool:
         return self.omegas is not None and self.snapshots is not None
 
 
-    def load(self, omegas, snapshots, F):
-        """
+    def load(self, omegas, snapshots, F) -> None:
+        r"""
         Load the ROM_basis with the provided omegas and snapshots, the user is responsible for ensuring that the omegas and snapshots are consistent and valid.
+
         Args:
-            omegas: Nx1 array of complex frequencies at which the snapshots were taken
-            snapshots: Nx2xM array of snapshot data, where N is the number of snapshots, 2 corresponds to X and Y, and M is the number of matrix elements
+            omegas (np.ndarray): ($n_s\times 1$) array of complex frequencies at which the snapshots were taken
+            snapshots (np.ndarray): ($n_s\times 2\times m$) array of snapshot data, where $n_s$ is the number of snapshots, 2 corresponds to $X$(0) and $Y$(1), and $m$ is the number of matrix elements
+
+        Example:
+        ```python
+        omegas, snapshots, F = user_defined_parser(data)
+        basis = ROM_basis()
+        basis.load(omegas, snapshots, F)
+        ```
+
         """
         self.omegas = omegas
         self.snapshots = snapshots
         self.F = F
 
 
-    def compute_SVD(self, cutoff=0.001, force_calc=False):
-        """
-            Computes the Singular Value Decomposition (SVD) of the snapshot data
+    def compute_SVD(self, cutoff:float=0.001, force_calc:bool=False) -> None:
+        r"""
+        Computes the Singular Value Decomposition (SVD) of the snapshot data and stores the transformation matrix $U$ and save in the ROM_basis object
 
         Args:
-            cutoff: the cutoff threshold for singular values (relative to the largest one)
-            force_calc: if True, always re-calculate the SVD
+            cutoff (float): the cutoff threshold for singular values (relative to the largest one), values below this threshold will be discarded in the SVD transformation.
+            force_calc (bool): if True, always re-calculate the SVD
+
         """
         if self.U is None or force_calc:
             nx, ny, nz = self.snapshots.shape
@@ -74,15 +102,26 @@ class ROM_basis:
             self._svd_snapshot_ML = np.einsum('l,lab,lk->kab', self.omegas, self.snapshots, self.U)
 
 
-    def expand_by_symmetry(self, which="all"):
-        """
-        Adding snapshots related by symmetry
-        X(-w) = Y(w) and Y(-w) = X(w) symmetry
-        X(w*) = X*(w) and Y(w*) = Y*(w) symmetry
-        X(-w*) = Y*(w) and Y(-w*) = X*(w) symmetry
+    def expand_by_symmetry(self, which:str="all") -> None:
+        r"""
+        Adding snapshots related by symmetry:
+
+        $X(-\omega) = Y(\omega)$ and $Y(-\omega) = X(\omega)$
+
+        $X(\omega^*) = X^*(\omega)$ and $Y(\omega^*) = Y^*(\omega)$
+
+        $X(-\omega^*) = Y^*(\omega)$ and $Y(-\omega^*) = X^*(\omega)$
 
         Args:
-            which: string specifying which symmetires to add (default "" adds all, "pm" adds +/- omega symmetry, "cc" adds complex conjugation symmetry)
+            which (str): specifies which symmetires to add (default "all" adds all, "pm" adds +/- omega symmetry, "cc" adds complex conjugation symmetry)
+
+        Example:
+        ```python
+        omegas, snapshots, F = user_defined_parser(data)
+        basis = ROM_basis()
+        basis.load(omegas, snapshots, F)
+        basis.expand_by_symmetry(which="all")
+        ```
 
         """
         if which == "all" or which == "pm":
@@ -111,13 +150,26 @@ class ROM_basis:
         self.omegas = omega
 
 
-    def next_snapshot(self, d_omega=None):
-        """
-        Builds the snapshot basis by launching FAM runs according to the specified build type and run type.
-        The method handles the entire process of generating FAM runfiles, executing them, and processing the output to construct the ROM basis.
+    def next_snapshot(self, d_omega:float=None) -> tuple:
+        r"""
+        Determines the next snapshot location using a greedy-1D or greedy-2D search.
+
+        Args:
+            d_omega (float): The step size for the frequency scan. If None, a default linear space is used.
 
         Returns:
-            Prints new snapshot location and corresponding cost
+            (next_snapshot_omega, cost): A tuple containing the frequency of the next snapshot and its associated cost.
+
+        Example:
+            ```python
+            omegas, snapshots, F = user_defined_parser(data)
+            basis = ROM_basis()
+            basis.build_type = 'greedy'  # or 'greedy_2D'
+
+            basis.load(omegas, snapshots, F)
+            new_snapshot, _ = basis.next_snapshot()
+            ```
+
         """
         if not self.is_loaded():
             raise ValueError("ROM_basis is not loaded. Please load the basis before building the snapshot basis.")
@@ -206,22 +258,24 @@ class ROM_basis:
             else:
                 max_cost_idx_H = np.argmax(COSTS_H)
             SUB_OPTIMAL_OMEGA = H_scan[max_cost_idx_H]
-            print("Selected : ", SUB_OPTIMAL_OMEGA)
+            print('New snapshot: ', SUB_OPTIMAL_OMEGA, '\nCost: ', COSTS_H[max_cost_idx_H])
+            return SUB_OPTIMAL_OMEGA, COSTS_H[max_cost_idx_H]
 
         else:
-            raise ValueError("Error")
+            raise NotImplementedError("Build type not implemented. Please choose 'greedy' or 'greedy_2D'.")
 
 
-    def evaluate(self, targets, svd=False):
-        """
+    def evaluate(self, targets, svd:bool=False) -> tuple:
+        r"""
         Evaluate the emulator at the given target parameters.
 
         Args:
-            targets: A list of frequencies at which to evaluate the emulator.
-            svd: A boolean indicating whether to use Singular Value Decomposition (SVD) for the projection. Default is False.
+            targets (np.ndarray): A list of frequencies at which to evaluate the emulator.
+            svd (bool): Whether to use Singular Value Decomposition (SVD) for the projection. Default is False.
 
         Returns:
             (targets, S): A tuple containing the input targets and the corresponding emulated strength.
+
         """
         S = np.zeros(len(targets))
 
