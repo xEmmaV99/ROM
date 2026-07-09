@@ -277,8 +277,6 @@ class ROM_basis:
             (targets, S): A tuple containing the input targets and the corresponding emulated strength.
 
         """
-        S = np.zeros(len(targets))
-
         if not self.is_loaded():
             raise ValueError("ROM_basis is not loaded. Please load the basis before building the snapshot basis.")
         else:

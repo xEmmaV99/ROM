@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 from src.ROM_basis import ROM_basis
 from parsers import FAMtalus
@@ -27,8 +28,6 @@ basis.next_snapshot(d_omega=0.1)
 targets = np.linspace(0, 40, 2000)+1.0j
 targets, S = basis.evaluate(targets)
 
-import matplotlib.pyplot as plt
-plt.plot(targets, S)
-plt.show()
+
 
 
