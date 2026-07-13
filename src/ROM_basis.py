@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 try:
     from src.Utils import cost_numba, evaluate_PG_numba, evaluate_G_numba, evaluate_G_SVD_numba, evaluate_PG_SVD_numba
@@ -21,7 +23,7 @@ class ROM_basis:
          - smearing of the output spectrum,
          - max smearing of the 2D greedy search space,
          - w_max and w_min to define the real part of the search space.
-        build_type (str): The type of basis building method to use, either 'greedy' or 'greedy_2D'.
+        greedy_method (str): The method used to find new snapshot, either '1D' or '2D'.
         projection_method (str): The method to use for projection, either 'PG' or 'G'
 
     """
@@ -50,7 +52,7 @@ class ROM_basis:
                          "max_smearing": 20.0, # maximum smearing to consider for new snapshots in 2D greedy
                          "w_min": 0, "w_max": 40,
                          }
-        self.build_type = 'greedy'
+        self.greedy_method = '1D'
         self.projection_method = "PG"
 
 
@@ -158,13 +160,13 @@ class ROM_basis:
             d_omega (float): The step size for the frequency scan. If None, a default linear space is used.
 
         Returns:
-            (next_snapshot_omega, cost): A tuple containing the frequency of the next snapshot and its associated cost.
+            (next_snapshot_omega, cost): A tuple containing the frequency of the next snapshot and the max error estimate (cost) at the target smearing. (For greedy 1D this is error est. associated to the frequency)
 
         Example:
             ```python
             omegas, snapshots, F = user_defined_parser(data)
             basis = ROM_basis()
-            basis.build_type = 'greedy'  # or 'greedy_2D'
+            basis.greedy_method = '1D'  # or '2D'
 
             basis.load(omegas, snapshots, F)
             new_snapshot, _ = basis.next_snapshot()
@@ -180,7 +182,7 @@ class ROM_basis:
             F = self.F
 
 
-        if self.build_type == 'greedy':
+        if self.greedy_method == '1D':
             # iterative basis creation
             if d_omega is None:
                 W_scan = np.linspace(self.settings['w_min'], self.settings['w_max'], num=2000) + self.settings['smear'] * 1.j
@@ -211,9 +213,9 @@ class ROM_basis:
             return W_scan[max_cost_idx], COSTS[max_cost_idx]
 
 
-        elif self.build_type == 'greedy_2D':
+        elif self.greedy_method == '2D':
             # Define the W_scan @ the target smearing
-            W_scan = np.linspace(d.w_min, d.w_max, num=2000) + d.smear * 1.j
+            W_scan = np.linspace(self.settings['w_min'], self.settings['w_max'], num=2000) + self.settings['smear'] * 1.j
 
             FdF = F.conj().T @ F
             COSTS = np.zeros(len(W_scan))
@@ -238,7 +240,7 @@ class ROM_basis:
             max_cost_idx = np.argmax(COSTS)
 
             # now, scan this omega value along the complex axis, and find the "sub"-optimal omega value
-            H_scan = np.real(W_scan[max_cost_idx]) + np.linspace(1, self.greedy_2D_settings["max_smearing"],200)*1j*d.smear
+            H_scan = np.real(W_scan[max_cost_idx]) + np.linspace(1, self.settings["max_smearing"],200)*1j*self.settings["smear"]
             COSTS_H = np.zeros(len(H_scan))
             _, alphas = evaluate_PG_numba(H_scan, snapshot_omegas, snapshots, F)
             for idx in prange(len(H_scan)):
@@ -251,15 +253,15 @@ class ROM_basis:
 
             # find the maximal cost in H but below a threshold
             COSTS_H = COSTS_H / np.max(COSTS_H)  # normalise wrt "highest" one
-            COSTS_H = np.where(COSTS_H > self.greedy_2D_settings["threshold"], 0.0, COSTS_H)
+            COSTS_H = np.where(COSTS_H > self.settings["threshold"], 0.0, COSTS_H)
             if np.all(COSTS_H == 0.0):
-                print("No new snapshot found above threshold, adding the one with largest smearing")
+                warnings.warn("No new snapshot found above threshold, adding the one with largest smearing", UserWarning, stacklevel=2)
                 max_cost_idx_H = -1
             else:
                 max_cost_idx_H = np.argmax(COSTS_H)
             SUB_OPTIMAL_OMEGA = H_scan[max_cost_idx_H]
             print('New snapshot: ', SUB_OPTIMAL_OMEGA, '\nCost: ', COSTS_H[max_cost_idx_H])
-            return SUB_OPTIMAL_OMEGA, COSTS_H[max_cost_idx_H]
+            return SUB_OPTIMAL_OMEGA, COSTS[max_cost_idx]
 
         else:
             raise NotImplementedError("Build type not implemented. Please choose 'greedy' or 'greedy_2D'.")
