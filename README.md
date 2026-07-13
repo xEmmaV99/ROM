@@ -1,44 +1,54 @@
 #### This repository is still under development
 
-This repository can be used to create an emulator for QRPA linear response. The emulator applies reduced order modelling to approxmate from previous FAM amplitudes. 
+This repository can be used to create an emulator for QRPA linear response. The emulator applies reduced order modelling to approximate from previous FAM amplitudes. 
 
+---
  The repository is structured as follows:
 ```text
 ROM/
-├── _inputs/
-├── _outputs/
-├── _scripts/
-├── _docs/
-├── example_scripts/
-│   ├── create_snapshots.py
-│   └── load_snapshots.py
+├── docs/
 ├── src/
 │   ├── __init__.py
-│   ├── Emulator.py
 │   ├── ROM_basis.py
-│   ├── Utils_basis.py
-│   ├── Utils_emulator.py
-│   └── Utils_parsers.py
+│   └── Utils.py
 ├── .gitignore
+├── LICENSE.md
 ├── mkdocs.yml
 ├── requirements.txt
-└──  README.md
+├── README.md
+└── script.py
 ```
-As suggested by the ```example_scripts```, there are two ways (online and offline) of using this repo. The online stage is emulator creation while the offline stage is emulator usage. 
+The user is expected to provide the FAM outputs and a parser to extract the following quantities:
+- $n_s$ FAM frequencies, parsed into a vector of length $n_s$
+- FAM amplitudes, parsed into a matrix of shape $(n_s, 2, m)$, ordered according to the $n_s$ frequencies, where $X$ and $Y$ stacked along the second dimension and $m$ is the number of matrix elements.
+- External field matrix elements, parsed into a vector of shape $(2m)$, with the first half corresponding to $F^{20}$ and the second half corresponding to $F^{02}$.
 
-### Online: Emulator Creation
-#### Required: mean-field solution and mean-field output in ```_input```, tantalus installation
-Initiate a ```ROM_builder``` object. This requires a meanfield solution and meanfield output. FAM parameters can be passed through a dictionary, or updated after initialisation using ```rom_builder.data.set_FAM_parameters()```. 
+After initialisation of the basis using
+```python
+from ROM.ROM_basis import ROM_basis
+import parser # user-defined parser
+basis = ROM_basis()
+omegas, matrices, F = parser()
+basis.load(omegas=omegas, snapshots=matrices, F=F)
+```
+the repository can be used for the following tasks:
+- Online: Finding a single new snapshot location
+```python
+basis.next_snapshot()
+```
+- Offline: Building the emulator and evaluating it to obtain the strength at new frequencies
+```python
+targets = np.linspace(0, 40, 2000)+1.0j
+basis.evaluate(targets)
+```
 
-
-The snapshot creation is started using ```build_snapshot_basis``` and specifying the build type (sampling method). This initiates the FAM calculations using tantalus which are required to obtain the basis vectors.
-
-In case the ```build_type == 'greedy'```, one can load previous runs using ```rom_builder.basis.load()```, the greedy search will continue to add basis vectors.
-
-
-### Offline: Emulator Application
-#### Required: Emulator XY matrices in ```_output```
-In order to set up the emulator, one has to load a basis with ```basis = ROM_basis()```,  ```basis.load(path)``` and then calling ``` emulator = Emulator(basis)```. The projection method is specified using the ```emulator.projection_method``` field. 
-
-To apply the emulator to target values, simply use ```emulator.evaluate(target_values)```.
-
+## Installation
+```bash
+pip install git+https://github.com/xEmmaV99/ROM.git
+pip install -r requirements.txt
+```
+## Documentation
+The documentation can be opened by running the following command in the root directory of the repository:
+```bash
+mkdocs serve
+```
