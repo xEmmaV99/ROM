@@ -4,20 +4,21 @@ import numpy as np
 
 @njit(fastmath=True, cache=True)
 def cost_numba(omega, alpha, FdF, MXdF, XMMX, F_norm, snapshot_omegas):
-    """
-    Computes the cost function for the given parameters.
+    r"""
+    Computes the error estimate for the given parameters.
 
     Args:
-        omega: frequency at which to evaluate the cost function
-        alpha: solution vector of the linear system ( A alpha = b ) evaluated at the frequency omega
-        FdF: precomputed scalar value representing the inner product of F and F^dagger
-        MXdF: precomputed vector representing (M X)^dagger F
-        XMMX: precomputed vector representing (MX)^dagger (MX)
-        F_norm: scaling factor for the cost function, typically the norm of F
-        snapshot_omegas: vector of frequencies corresponding to the snapshots used in the ROM basis
+        omega (np.ndarray): frequency at which to evaluate the error estimate
+        alpha (np.ndarray): solution vector of the linear system ($A\alpha = b$) evaluated at the frequency omega
+        FdF (np.ndarray): precomputed scalar value representing the inner product of $\mathcal{F}$ and $\mathcal{F}^\dagger$
+        MXdF (np.ndarray): precomputed vector representing $(\mathcal{M} \mathcal{X})^{\dagger} \mathcal{F}$
+        XMMX (np.ndarray): precomputed vector representing $(\mathcal{M}\mathcal{X})^\dagger (\mathcal{M}\mathcal{X})$
+        F_norm (float): scaling factor for the error estimate, typically the norm of $\mathcal{F}$
+        snapshot_omegas (np.ndarray): vector of frequencies corresponding to the snapshots used in the ROM basis
 
     Returns:
-        The computed cost function value for omega.
+        The computed error estimate value for omega.
+
     """
     alpha_flat = alpha.ravel()
     MXdF_flat = MXdF.ravel()
@@ -54,17 +55,17 @@ def cost_numba(omega, alpha, FdF, MXdF, XMMX, F_norm, snapshot_omegas):
 
 @njit(inline='always',parallel=True, fastmath=True, cache=True)
 def evaluate_G_numba(targets, snapshot_omegas, snapshot_matrix, F):
-    """
+    r"""
     Evaluation of the Galerkin projected FAM equations.
 
     Args:
-        targets: The target frequencies at which to evaluate the strength.
-        snapshot_omegas: snapshot frequencies corresponding to the ROM basis, (num_snapshots,).
-        snapshot_matrix: snapshot matrix mathcal(X) = [X, Y] of the ROM basis (num_snapshots, 2, num_entries).
-        F: F vector (num_entries,).
+        targets (np.ndarray): The target frequencies at which to evaluate the strength.
+        snapshot_omegas (np.ndarray): snapshot frequencies corresponding to the ROM basis, ($n_s$,).
+        snapshot_matrix (np.ndarray): snapshot matrix $\mathcal{X} = [X, Y]$ of the ROM basis ($n_s$, 2, $m$).
+        F (np.ndarray): $\mathcal{F}$ vector ($2m$,).
 
     Returns:
-        S: The evaluated strength at the target frequencies (num_targets,).
+        S (np.ndarray): The evaluated strength at the target frequencies ($\texttt{len}(\mathrm{targets})$,).
 
     """
     X, Y = snapshot_matrix[:, 0, :], snapshot_matrix[:, 1, :]
@@ -107,18 +108,19 @@ def evaluate_G_numba(targets, snapshot_omegas, snapshot_matrix, F):
 
 @njit(inline='always',parallel=True, fastmath=True, cache=True) #DEBUG EMMA
 def evaluate_PG_numba(targets, snapshot_omegas, snapshot_matrix, F):
-    """
+    r"""
     Evaluation of the Galerkin projected FAM equations.
 
     Args:
-        targets: The target frequencies at which to evaluate the strength.
-        snapshot_omegas: snapshot frequencies corresponding to the ROM basis, (num_snapshots,).
-        snapshot_matrix: snapshot matrix mathcal(X) = [X, Y] of the ROM basis (num_snapshots, 2, num_entries).
-        F: F vector (num_entries,).
+        targets (np.ndarray): The (complex-valued) target frequencies at which to evaluate the strength.
+        snapshot_omegas (np.ndarray): snapshot frequencies corresponding to the ROM basis, ($n_s$,).
+        snapshot_matrix (np.ndarray): snapshot matrix $\mathcal{X} = [X, Y]$ of the ROM basis ($n_s$, 2, $m$).
+        F (np.ndarray): $\mathcal{F}$ vector ($2m$,).
 
     Returns:
-        S: The evaluated strength at the target frequencies (num_targets,).
-        C_vals: The coefficients C for each target frequency (num_targets, num_snapshots), used for calculating the error estimator (cost function) for greedy sampling
+        S (np.ndarray): The evaluated strength at the target frequencies ($\texttt{len}(\mathrm{targets})$,).
+        C_vals (np.ndarray): The coefficients $\alpha$ for each target frequency ($\texttt{len}(\mathrm{targets})$, $n_s$), used for calculating the error estimator (error estimate) for greedy sampling
+
     """
     X, Y = snapshot_matrix[:, 0, :], snapshot_matrix[:, 1, :]
 
@@ -164,18 +166,19 @@ def evaluate_PG_numba(targets, snapshot_omegas, snapshot_matrix, F):
 
 @njit(parallel=True, fastmath=True, cache=True)
 def evaluate_G_SVD_numba(targets, snapshot_ML, transformed_snapshots, U, F):
-    """
+    r"""
     Evaluation of the Galerkin projected FAM equations including the SVD.
 
     Args:
-        targets: The target frequencies at which to evaluate the strength.
-        snapshot_ML: precalculated transformed matrix (see expression in the thesis for details)
-        transformed_snapshots: transformed snapshot matrix of the ROM basis
-        U: U matrix from the SVD of the snapshot matrix (num_snaps, num_modes).
-        F: F vector (num_entries,).
+        targets (np.ndarray): The target frequencies at which to evaluate the strength.
+        snapshot_ML (np.ndarray): precalculated transformed matrix (see expression in the thesis for details)
+        transformed_snapshots (np.ndarray): transformed snapshot matrix of the ROM basis
+        U (np.ndarray): $U$ matrix from the SVD of the snapshot matrix ($n_s$, $n_r$) reducing $n_s$ to $n_r$ dimensions.
+        F (np.ndarray): $\mathcal{F}$ vector ($2m$,).
 
     Returns:
-        S: The evaluated strength at the target frequencies (num_targets,).
+        S (np.ndarray): The evaluated strength at the target frequencies ($\texttt{len}(\mathrm{targets})$,).
+
     """
     num_targets = len(targets)
 
@@ -214,20 +217,21 @@ def evaluate_G_SVD_numba(targets, snapshot_ML, transformed_snapshots, U, F):
 
 @njit(parallel=True, fastmath=True, cache=True)
 def evaluate_PG_SVD_numba(targets, snapshot_omegas_orig, snapshot_matrices_orig, snapshot_matrices, U, F):
-    """
+    r"""
     Evaluation of the Petrov-Galerkin projected FAM equations including the SVD.
 
     Args:
-        targets: The target frequencies at which to evaluate the strength.
-        snapshot_omegas_orig:  snapshot frequencies corresponding to the ROM basis, (num_snapshots,).
-        snapshot_matrices_orig: snapshot matrix mathcal(X) = [X, Y] of the ROM basis (num_snapshots, 2, num_entries).
-        snapshot_matrices: transformed/truncated snapshot matrix
-        U: U matrix from the SVD of the snapshot matrix (num_snaps, num_modes).
-        F: F vector (num_entries,).
+        targets (np.ndarray): The target frequencies at which to evaluate the strength.
+        snapshot_omegas_orig (np.ndarray):  snapshot frequencies corresponding to the ROM basis, ($n_s$,).
+        snapshot_matrices_orig (np.ndarray): snapshot matrix $\mathcal{X} = [X, Y]$ of the ROM basis ($n_s$, 2, $m$).
+        snapshot_matrices (np.ndarray): transformed/truncated snapshot matrix
+        U (np.ndarray): $U$ matrix from the SVD of the snapshot matrix ($n_s$, $n_r$), reducing $n_s$ to $n_r$ dimensions.
+        F (np.ndarray): $\mathcal{F}$ vector ($2m$,).
 
     Returns:
-        S: The evaluated strength at the target frequencies (num_targets,).
-        C_SVD: The coefficients C for each target frequency (num_targets, num_modes), used for calculating the error estimator (cost function) for greedy sampling
+        S (np.ndarray): The evaluated strength at the target frequencies ($\texttt{len}(\mathrm{targets})$,).
+        C_SVD (np.ndarray): The coefficients C for each target frequency ($\texttt{len}(\mathrm{targets})$, $n_r$), used for calculating the error estimator (error estimate) for greedy sampling
+
     """
     Ns = U.shape[0]
     Nr = U.shape[1]
