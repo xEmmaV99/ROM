@@ -32,11 +32,11 @@ omegas, matrices, F = parser()
 basis.load(omegas=omegas, snapshots=matrices, F=F)
 ```
 the repository can be used for the following tasks:
-- Online: Finding a single new snapshot location
+- Offline: Building the emulator by finding a single new snapshot location
 ```python
 basis.next_snapshot()
 ```
-- Offline: Building the emulator and evaluating it to obtain the strength at new frequencies
+- Online: Evaluating the emulator to obtain the strength at new frequencies
 ```python
 targets = np.linspace(0, 40, 2000)+1.0j
 basis.evaluate(targets)
